@@ -16,7 +16,7 @@ export async function loadConfigFromDir(dir: string): Promise<AwesomePublishConf
     if (existsSync(configPath)) {
       const jiti = createJiti(configPath, { interopDefault: true });
       const mod = await jiti.import(configPath) as { default?: AwesomePublishConfig } | AwesomePublishConfig;
-      return 'default' in mod ? mod.default : mod;
+      return ('default' in mod ? mod.default : mod) as AwesomePublishConfig | undefined;
     }
   }
   return undefined;
