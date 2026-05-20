@@ -1,15 +1,15 @@
-[![npm](https://img.shields.io/npm/v/typescript-starter?color=%2300d26a&style=for-the-badge)](https://www.npmjs.com/package/typescript-starter)
-[![Build Status](https://img.shields.io/github/actions/workflow/status/LoaderB0T/typescript-starter/build.yml?branch=main&style=for-the-badge)](https://github.com/LoaderB0T/typescript-starter/actions/workflows/build.yml)
-[![Sonar Quality Gate](https://img.shields.io/sonar/quality_gate/LoaderB0T_typescript-starter?server=https%3A%2F%2Fsonarcloud.io&style=for-the-badge)](https://sonarcloud.io/summary/new_code?id=LoaderB0T_typescript-starter)
-[![bundle size](https://img.shields.io/bundlephobia/minzip/typescript-starter?color=%23FF006F&label=Bundle%20Size&style=for-the-badge)](https://bundlephobia.com/package/typescript-starter)
+[![npm](https://img.shields.io/npm/v/awesome-publish?color=%2300d26a&style=for-the-badge)](https://www.npmjs.com/package/awesome-publish)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/LoaderB0T/awesome-publish/build.yml?branch=main&style=for-the-badge)](https://github.com/LoaderB0T/awesome-publish/actions/workflows/build.yml)
+[![Sonar Quality Gate](https://img.shields.io/sonar/quality_gate/LoaderB0T_awesome-publish?server=https%3A%2F%2Fsonarcloud.io&style=for-the-badge)](https://sonarcloud.io/summary/new_code?id=LoaderB0T_awesome-publish)
+[![bundle size](https://img.shields.io/bundlephobia/minzip/awesome-publish?color=%23FF006F&label=Bundle%20Size&style=for-the-badge)](https://bundlephobia.com/package/awesome-publish)
 
-# typescript-starter
+# awesome-publish
 
 Template for TypeScript projects with Jest, ESLint, Prettier, GitHub Actions, and more.
 
 ## Motivation 💥
 
-**typescript-starter** is a template for TypeScript (ESM&CJS) projects with Jest, ESLint, Prettier, GitHub Actions, and more.
+**awesome-publish** is a template for TypeScript (ESM&CJS) projects with Jest, ESLint, Prettier, GitHub Actions, and more.
 
 ## Features 🔥
 
@@ -30,26 +30,26 @@ Template for TypeScript projects with Jest, ESLint, Prettier, GitHub Actions, an
 ## Installation 📦
 
 ```console
-pnpm i typescript-starter
+pnpm i awesome-publish
 // or
-yarn add typescript-starter
+yarn add awesome-publish
 // or
-npm i typescript-starter
+npm i awesome-publish
 ```
 
 ## Docs 📃
 
-Find a bit of documentation [here](https://github.com/LoaderB0T/typescript-starter/blob/main/DOCS.md).
+Find a bit of documentation [here](https://github.com/LoaderB0T/awesome-publish/blob/main/DOCS.md).
 
 ## Usage Example 🚀
 
 ```typescript
-import { Something } from 'typescript-starter';
+import { Something } from 'awesome-publish';
 ```
 
 ```typescript
 // Example: Simple text logging
-Something.dostuff('Welcome to typescript-starter!');
+Something.dostuff('Welcome to awesome-publish!');
 ```
 
 ## Contributing 🧑🏻‍💻
@@ -73,4 +73,4 @@ Distributed under the MIT License. See `LICENSE.txt` for more information.
 
 Janik Schumacher - [@LoaderB0T](https://twitter.com/LoaderB0T) - [linkedin](https://www.linkedin.com/in/janikschumacher/)
 
-Project Link: [https://github.com/LoaderB0T/typescript-starter](https://github.com/LoaderB0T/typescript-starter)
+Project Link: [https://github.com/LoaderB0T/awesome-publish](https://github.com/LoaderB0T/awesome-publish)
