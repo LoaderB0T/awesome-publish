@@ -3,3 +3,4 @@ lib
 type-compat
 junit.xml
 log.txt
+.claude/settings.local.json
