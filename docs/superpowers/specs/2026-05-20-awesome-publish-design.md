@@ -330,15 +330,15 @@ The `pack` command reads but never consumes changesets. The `version` and `publi
 function buildPipeline(command: Command, config: ResolvedConfig): PipelineStep[] {
   const features = getCoreFeaturesForCommand(command);
 
-  if (config.changesets?.enabled) {
+  if (config.changesets.enabled) {
     features.push(readChangesetsFeature);
     if (command === 'publish' || command === 'version') {
       features.push(consumeChangesetsFeature);
     }
   }
   if (command === 'publish') {
-    if (normalizeAiFeature(config.aiReleaseNotes)) features.push(aiNotesFeature);
-    if (config.github?.releases?.enabled) features.push(githubReleaseFeature);
+    if (config.aiReleaseNotes.enabled) features.push(aiNotesFeature);
+    if (config.github.releases.enabled) features.push(githubReleaseFeature);
   }
 
   const allSteps = features.flatMap(f => f.steps);
@@ -360,13 +360,14 @@ If AI notes are enabled but GitHub releases are disabled, `ai-notes-publish` is 
 ```
 read-changesets
   → determine-version
-    → ai-notes-generate (+ interactive review)
-      → build-temp-dir
-        → modify-package-json
-          → publish-npm
-            → github-release (creates release without AI notes)
-              → ai-notes-publish (updates release with AI notes)
-                → cleanup
+    → consume-changesets
+      → ai-notes-generate (+ interactive review)
+        → build-temp-dir
+          → modify-package-json
+            → publish-npm
+              → github-release (creates release without AI notes)
+                → ai-notes-publish (updates release with AI notes)
+                  → cleanup
 ```
 
 ## 5. CLI Commands & Modes
