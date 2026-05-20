@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "target": "ES2025",
+    "target": "ES2024",
     "module": "ESNext",
     "lib": [
       "ES2025",
@@ -15,8 +15,6 @@
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "strictPropertyInitialization": true,
-    "experimentalDecorators": true,
-    "emitDecoratorMetadata": true,
     "stripInternal": true
   }
 }

@@ -1,3 +1,4 @@
 allowBuilds:
+  awesome-logging: true
   esbuild: true
   unrs-resolver: false
