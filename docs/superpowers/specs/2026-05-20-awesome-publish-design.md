@@ -22,7 +22,58 @@ A CLI tool for effortless npm package publishing with quality-of-life features: 
 | Pack output | Default `./awesome-publish-pack/` with `--out` override | Simple default, flexible when needed |
 | Git clean check | Configurable in config, `--ignore-git` CLI override | Default requires clean tree |
 
-## 1. Project Structure
+## 1. Core Types
+
+### PackageInfo
+
+```ts
+interface PackageInfo {
+  name: string;               // e.g., "@scope/my-pkg"
+  version: string;            // current version from package.json
+  dir: string;                // absolute path to package directory
+  packageJson: Record<string, unknown>;
+  config: ResolvedConfig;     // resolved config (package-level or root fallback)
+}
+```
+
+### Changeset
+
+Compatible with @changesets/cli format. Each `.changeset/*.md` file produces one `Changeset`:
+
+```ts
+interface Changeset {
+  id: string;                 // filename without extension
+  summary: string;            // markdown body of the changeset file
+  releases: {
+    name: string;             // package name
+    type: 'patch' | 'minor' | 'major';
+  }[];
+}
+```
+
+### VersionBump
+
+```ts
+interface VersionBump {
+  packageName: string;
+  from: string;               // e.g., "1.2.0"
+  to: string;                 // e.g., "1.3.0"
+  type: 'patch' | 'minor' | 'major';
+}
+```
+
+### PublishResult
+
+```ts
+interface PublishResult {
+  packageName: string;
+  version: string;            // published version
+  registry: string;           // registry URL
+  status: 'published' | 'skipped-already-exists';
+}
+```
+
+## 2. Project Structure
 
 ```
 src/
@@ -46,7 +97,6 @@ src/
 │   └── phases.ts                 # typed phase ID registry
 │
 ├── steps/
-│   ├── resolve-packages.ts
 │   ├── read-changesets.ts
 │   ├── determine-version.ts
 │   ├── build-temp-dir.ts
@@ -76,7 +126,7 @@ src/
     └── changeset.ts
 ```
 
-## 2. Configuration
+## 3. Configuration
 
 ### Config file
 
@@ -158,7 +208,7 @@ Validation checks:
 - `publishFiles` must be non-empty
 - `github.releases.mode` must be `'per-package'` or `'combined'`
 
-## 3. Pipeline Engine
+## 4. Pipeline Engine
 
 ### Typed phases
 
@@ -167,7 +217,6 @@ Single source of truth for all phase identifiers. Compile-time checked — refer
 ```ts
 // src/pipeline/phases.ts
 export const Phases = {
-  RESOLVE_PACKAGES: 'resolve-packages',
   READ_CHANGESETS: 'read-changesets',
   DETERMINE_VERSION: 'determine-version',
   AI_NOTES_GENERATE: 'ai-notes-generate',
@@ -187,7 +236,7 @@ export type Phase = typeof Phases[keyof typeof Phases];
 Each step declares what context it reads and what it contributes. Steps declare ordering via `after`/`before` constraints on typed `Phase` values.
 
 ```ts
-interface PipelineStep<TRead, TWrite> {
+interface PipelineStep<TRead = unknown, TWrite = void> {
   name: string;
   phase: Phase;
   after: Phase[];
@@ -198,19 +247,21 @@ interface PipelineStep<TRead, TWrite> {
 }
 ```
 
+**Type safety boundary:** The `TRead`/`TWrite` generics are a documentation and per-step authoring aid — they type-check each step's implementation in isolation. The pipeline runner internally accumulates context as `Record<string, unknown>` and casts when calling each step. This is intentional: statically proving that the accumulated context satisfies `TRead` at each position in a dynamically-sorted pipeline is not feasible in TypeScript without extreme type gymnastics. The ordering constraints (`after`/`before`) are the runtime guarantee that dependencies are met. Tests verify this contract.
+
 ### Context
 
-Core context is always present. Each feature extends it with its own slice. Context builds up as steps execute — each step's `execute` return value is merged in.
+Core context is populated before the pipeline starts. `packages` is resolved by the workspace service before pipeline execution — it is not a pipeline step.
 
 ```ts
 interface CoreContext {
   config: ResolvedConfig;
-  packages: PackageInfo[];
+  packages: PackageInfo[];    // resolved before pipeline starts
   mode: 'interactive' | 'ci';
   dryRun: boolean;
 }
 
-// Feature-specific slices
+// Feature-specific context slices (contributed by steps)
 interface ChangesetContext { changesets: Changeset[]; }
 interface VersionContext { versionBumps: Map<string, VersionBump>; }
 interface TempDirContext { tempDirs: Map<string, string>; }
@@ -218,49 +269,76 @@ interface AiNotesContext { releaseNotes: Map<string, string>; }
 interface PublishContext { publishResults: Map<string, PublishResult>; }
 ```
 
+Each step's `execute` returns its context contribution (or `void`). The pipeline runner merges non-void returns into the accumulated context object via `Object.assign`.
+
 ### Pipeline runner
 
-1. Collect steps from all enabled features
-2. Topological sort by `before`/`after` constraints
-3. Validate no cycles (fail at startup with cycle path if detected)
-4. Execute steps in order:
+1. Resolve packages via workspace service (populates `CoreContext.packages`)
+2. Collect steps from all enabled features
+3. Topological sort by `before`/`after` constraints
+   - **Missing phase references are silently ignored.** If a step declares `after: [Phases.READ_CHANGESETS]` but no step with that phase is registered (because changesets are disabled), the constraint is dropped. This allows steps to declare optional dependencies without requiring the feature to be enabled.
+4. Validate no cycles (fail at startup with cycle path if detected)
+5. Execute steps in order:
    - Check `shouldRun` — skip if false
    - Check `dryRun` + `hasSideEffects` — log what would happen, skip
-   - Execute, merge returned context
+   - Execute, merge returned context into accumulated state
    - On failure: stop immediately, report succeeded/failed/skipped
 
 ### Feature registration
 
-Each feature is a module exporting its steps. Features register based on config:
+Each feature is a module exporting its steps. Features register based on config and command.
+
+**Per-command step sets:**
+
+| Command | Core features | Optional features |
+|---|---|---|
+| `publish` | determineVersion, buildTempDir, modifyPackageJson, publishNpm, cleanup | changesets, aiNotes, githubRelease |
+| `pack` | determineVersion, buildTempDir, modifyPackageJson, packLocal, cleanup | changesets |
+| `version` | determineVersion, consumeChangesets, cleanup | changesets |
 
 ```ts
-function buildPipeline(config: ResolvedConfig): PipelineStep[] {
-  const features = [
-    resolvePackagesFeature,     // always
-    determineVersionFeature,    // always
-    buildTempDirFeature,        // always
-    modifyPackageJsonFeature,   // always
-    publishNpmFeature,          // always (for publish command)
-    cleanupFeature,             // always
-  ];
+function buildPipeline(command: Command, config: ResolvedConfig): PipelineStep[] {
+  const features = getCoreFeaturesForCommand(command);
 
   if (config.changesets?.enabled) features.push(changesetsFeature);
-  if (normalizeAiFeature(config.aiReleaseNotes)) features.push(aiNotesFeature);
-  if (config.github?.releases?.enabled) features.push(githubReleaseFeature);
+  if (command === 'publish') {
+    if (normalizeAiFeature(config.aiReleaseNotes)) features.push(aiNotesFeature);
+    if (config.github?.releases?.enabled) features.push(githubReleaseFeature);
+  }
 
   const allSteps = features.flatMap(f => f.steps);
   return topologicalSort(allSteps);
 }
 ```
 
+### Changeset consumption
+
+The `version` command consumes (deletes) changeset files after bumping versions, matching `@changesets/cli version` behavior. The `publish` command also consumes changesets as part of its flow. The `pack` command reads but does not consume changesets.
+
 ### Multi-step features
 
 A feature can register multiple steps at different points in the pipeline. Example — AI release notes:
 
-- `ai-notes-generate` step: runs after `determine-version`, before `publish-npm`. In interactive mode, prompts user to review/approve generated notes.
-- `ai-notes-publish` step: runs after `publish-npm`, before `cleanup`. Attaches approved notes to the GitHub release.
+- `ai-notes-generate` step: runs after `determine-version`, before `publish-npm`. In interactive mode, prompts user to review/approve generated notes. Stores approved notes in `AiNotesContext`.
+- `ai-notes-publish` step: runs after `github-release`, before `cleanup`. Updates the existing GitHub release to include AI-generated notes (requires `updateRelease` on GitHub service).
 
-## 4. CLI Commands & Modes
+If AI notes are enabled but GitHub releases are disabled, `ai-notes-publish` is skipped (its `shouldRun` checks `config.github.releases.enabled`). The generated notes are still logged to console for the user.
+
+**Resolved pipeline order for `publish` with all features enabled:**
+
+```
+read-changesets
+  → determine-version
+    → ai-notes-generate (+ interactive review)
+      → build-temp-dir
+        → modify-package-json
+          → publish-npm
+            → github-release (creates release without AI notes)
+              → ai-notes-publish (updates release with AI notes)
+                → cleanup
+```
+
+## 5. CLI Commands & Modes
 
 ### Commands
 
@@ -293,6 +371,15 @@ In CI mode:
 --out            Output directory for pack command
 ```
 
+### `--filter` behavior
+
+The `--filter` flag matches against **package names** (not directory paths). Supports glob patterns: `--filter="@scope/*"`, `--filter="my-pkg"`.
+
+Filtering is applied during package resolution (before the pipeline starts). Only matched packages enter `CoreContext.packages`. Consequences:
+- Changeset resolution still reads all changesets but only applies bumps to filtered packages
+- Combined GitHub releases only include filtered packages (release body notes which packages were included)
+- If a filtered package has no changeset (changesets enabled), same behavior as unfiltered: interactive prompts for manual bump, CI errors
+
 ### Init wizard flow
 
 1. Detect package manager from lockfile
@@ -306,7 +393,7 @@ In CI mode:
 9. Optionally write `.github/workflows/publish.yml`
 10. Optionally write `.github/workflows/changeset-check.yml`
 
-## 5. Services
+## 6. Services
 
 ### Git Service (`src/services/git.ts`)
 
@@ -336,10 +423,13 @@ Uniform interface with per-PM adapters:
 ### GitHub Service (`src/services/github.ts`)
 
 - Plain `fetch` against GitHub REST API
-- Create release with markdown body
+- `createRelease(tag, body?)` — create release, optionally with markdown body
+- `updateRelease(releaseId, body)` — update existing release (used by AI notes publish step)
 - Per-package tags: `@scope/pkg@1.2.3`
 - Combined tags: configurable format
 - Auth via `GITHUB_TOKEN` env var
+
+**Combined release + partial publish failure:** If publishing fails mid-way (fail-fast), no GitHub release is created. GitHub releases are only created after all packages in the run have been successfully published. This avoids partial/misleading releases.
 
 ### AI Provider Service (`src/services/ai/`)
 
@@ -365,7 +455,7 @@ API key from `AWESOME_PUBLISH_AI_KEY` env var.
 - Validate and normalize config
 - Export `defineConfig()` identity function for type inference
 
-## 6. Error Handling
+## 7. Error Handling
 
 ### Error categories
 
@@ -400,7 +490,7 @@ X [publish-npm] Failed to publish @scope/b@1.2.0
   Temp dirs preserved: /tmp/awesome-publish-xyz
 ```
 
-## 7. Testing Strategy
+## 8. Testing Strategy
 
 ### Structure
 
@@ -434,7 +524,7 @@ test/
 - No E2E publish tests — dry run covers full pipeline without side effects
 - vitest as test runner
 
-## 8. Dependencies
+## 9. Dependencies
 
 | Package | Purpose |
 |---|---|
@@ -446,7 +536,7 @@ test/
 
 All other functionality (git, GitHub API, npm publish) uses Node.js built-ins (`child_process`, `fetch`, `fs`).
 
-## 9. Platform Support
+## 10. Platform Support
 
 - Windows, macOS, Linux
 - Node.js (ESM only, `"type": "module"`)
