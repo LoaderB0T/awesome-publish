@@ -98,6 +98,7 @@ src/
 │
 ├── steps/
 │   ├── read-changesets.ts
+│   ├── consume-changesets.ts
 │   ├── determine-version.ts
 │   ├── build-temp-dir.ts
 │   ├── modify-package-json.ts
@@ -196,12 +197,33 @@ interface AwesomePublishConfig {
 }
 ```
 
+### ResolvedConfig
+
+`ResolvedConfig` is the normalized form of `AwesomePublishConfig` after loading and validation. All shorthand forms are expanded, optional fields have defaults applied:
+
+```ts
+interface ResolvedConfig {
+  packageManager: 'npm' | 'yarn' | 'pnpm';       // auto-detected if omitted
+  publishFiles: string[];                           // required, non-empty
+  stripScripts: boolean | string[];
+  requireCleanGit: boolean;                         // default: true
+  changesets: { enabled: boolean; enforceInPR: boolean };
+  github: { releases: { enabled: boolean; mode: 'per-package' | 'combined' } };
+  aiProvider?: { provider: 'anthropic' | 'openai-compatible'; model: string; baseUrl?: string };
+  aiReleaseNotes: { enabled: boolean; customPromptFile?: string };
+}
+```
+
 ### Normalization
 
-During config loading, shorthand forms are normalized to their full object form:
+During config loading, shorthand forms are normalized to `ResolvedConfig`:
 
 - `aiReleaseNotes: true` becomes `{ enabled: true }`
-- `stripScripts: true` stays as-is (handled at usage site)
+- `aiReleaseNotes: undefined` becomes `{ enabled: false }`
+- Missing `changesets` becomes `{ enabled: false, enforceInPR: false }`
+- Missing `github` becomes `{ releases: { enabled: false, mode: 'per-package' } }`
+- Missing `requireCleanGit` defaults to `true`
+- `packageManager` auto-detected from lockfile if omitted
 
 Validation checks:
 - If any AI feature is enabled, `aiProvider` must be present
@@ -218,6 +240,7 @@ Single source of truth for all phase identifiers. Compile-time checked — refer
 // src/pipeline/phases.ts
 export const Phases = {
   READ_CHANGESETS: 'read-changesets',
+  CONSUME_CHANGESETS: 'consume-changesets',
   DETERMINE_VERSION: 'determine-version',
   AI_NOTES_GENERATE: 'ai-notes-generate',
   BUILD_TEMP_DIR: 'build-temp-dir',
@@ -267,6 +290,7 @@ interface VersionContext { versionBumps: Map<string, VersionBump>; }
 interface TempDirContext { tempDirs: Map<string, string>; }
 interface AiNotesContext { releaseNotes: Map<string, string>; }
 interface PublishContext { publishResults: Map<string, PublishResult>; }
+interface GithubReleaseContext { releaseIds: Map<string, number>; } // packageName or 'combined' → GH release ID
 ```
 
 Each step's `execute` returns its context contribution (or `void`). The pipeline runner merges non-void returns into the accumulated context object via `Object.assign`.
@@ -292,15 +316,26 @@ Each feature is a module exporting its steps. Features register based on config 
 
 | Command | Core features | Optional features |
 |---|---|---|
-| `publish` | determineVersion, buildTempDir, modifyPackageJson, publishNpm, cleanup | changesets, aiNotes, githubRelease |
-| `pack` | determineVersion, buildTempDir, modifyPackageJson, packLocal, cleanup | changesets |
-| `version` | determineVersion, consumeChangesets, cleanup | changesets |
+| `publish` | determineVersion, buildTempDir, modifyPackageJson, publishNpm, cleanup | readChangesets, consumeChangesets, aiNotes, githubRelease |
+| `pack` | determineVersion, buildTempDir, modifyPackageJson, packLocal, cleanup | readChangesets |
+| `version` | determineVersion, cleanup | readChangesets, consumeChangesets |
+
+The changeset feature is split into two independent features:
+- **readChangesets**: reads `.changeset/` files into `ChangesetContext`. Registered when `config.changesets.enabled`.
+- **consumeChangesets**: deletes consumed changeset files after version bumps. Registered when `config.changesets.enabled` AND command is `publish` or `version`. Has `after: [Phases.DETERMINE_VERSION]`. Its `shouldRun` checks that `ChangesetContext` is populated (no-op if no changesets were read).
+
+The `pack` command reads but never consumes changesets. The `version` and `publish` commands consume them, matching `@changesets/cli version` behavior.
 
 ```ts
 function buildPipeline(command: Command, config: ResolvedConfig): PipelineStep[] {
   const features = getCoreFeaturesForCommand(command);
 
-  if (config.changesets?.enabled) features.push(changesetsFeature);
+  if (config.changesets?.enabled) {
+    features.push(readChangesetsFeature);
+    if (command === 'publish' || command === 'version') {
+      features.push(consumeChangesetsFeature);
+    }
+  }
   if (command === 'publish') {
     if (normalizeAiFeature(config.aiReleaseNotes)) features.push(aiNotesFeature);
     if (config.github?.releases?.enabled) features.push(githubReleaseFeature);
@@ -310,10 +345,6 @@ function buildPipeline(command: Command, config: ResolvedConfig): PipelineStep[]
   return topologicalSort(allSteps);
 }
 ```
-
-### Changeset consumption
-
-The `version` command consumes (deletes) changeset files after bumping versions, matching `@changesets/cli version` behavior. The `publish` command also consumes changesets as part of its flow. The `pack` command reads but does not consume changesets.
 
 ### Multi-step features
 
@@ -359,16 +390,35 @@ In CI mode:
 - If changesets disabled: `--bump=patch|minor|major` required, error if missing
 - AI release notes generated without review prompt
 
-### CLI args (publish command)
+### CLI args
+
+**Shared args** (available on all commands except `init`):
 
 ```
 --ci             Run in CI mode (non-interactive)
 --dry-run        Preview without side effects
+--filter         Process specific packages only (glob on package names)
+--ignore-git     Skip clean git working tree check
+```
+
+**`publish` command:**
+
+```
 --bump           Version bump type (CI, ignored if changesets enabled)
 --tag            npm dist-tag (e.g., next, beta)
---filter         Publish specific packages only (glob pattern)
---ignore-git     Skip clean git working tree check
---out            Output directory for pack command
+```
+
+**`pack` command:**
+
+```
+--bump           Version bump type (CI, ignored if changesets enabled)
+--out            Output directory (default: ./awesome-publish-pack/)
+```
+
+**`version` command:**
+
+```
+--bump           Version bump type (CI, ignored if changesets enabled)
 ```
 
 ### `--filter` behavior
@@ -423,8 +473,8 @@ Uniform interface with per-PM adapters:
 ### GitHub Service (`src/services/github.ts`)
 
 - Plain `fetch` against GitHub REST API
-- `createRelease(tag, body?)` — create release, optionally with markdown body
-- `updateRelease(releaseId, body)` — update existing release (used by AI notes publish step)
+- `createRelease(tag, body?)` → `Promise<{ id: number }>` — create release, optionally with markdown body. Returns the release ID (stored in `GithubReleaseContext` for later steps).
+- `updateRelease(releaseId, body)` — update existing release body (used by AI notes publish step, which reads release ID from `GithubReleaseContext`)
 - Per-package tags: `@scope/pkg@1.2.3`
 - Combined tags: configurable format
 - Auth via `GITHUB_TOKEN` env var
