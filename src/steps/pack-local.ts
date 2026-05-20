@@ -7,7 +7,7 @@ import { createAdapter } from '../services/package-manager.js';
 
 export const packLocalStep: PipelineStep<TempDirContext & { cliArgs?: { out?: string } }> = {
   name: 'pack-local',
-  phase: Phases.PUBLISH_NPM,
+  phase: Phases.PACK_LOCAL,
   after: [Phases.MODIFY_PACKAGE_JSON],
   before: [Phases.CLEANUP],
   hasSideEffects: true,

@@ -7,6 +7,7 @@ export const Phases = {
   BUILD_TEMP_DIR: 'build-temp-dir',
   MODIFY_PACKAGE_JSON: 'modify-package-json',
   PUBLISH_NPM: 'publish-npm',
+  PACK_LOCAL: 'pack-local',
   AI_NOTES_PUBLISH: 'ai-notes-publish',
   GITHUB_RELEASE: 'github-release',
   CLEANUP: 'cleanup',

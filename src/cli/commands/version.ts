@@ -6,6 +6,7 @@ import { detectPackageManager } from '../../services/package-manager.js';
 import { resolvePackages } from '../../services/workspace.js';
 import { buildPipeline } from '../../pipeline/build-pipeline.js';
 import { runPipeline } from '../../pipeline/pipeline.js';
+import { GitService } from '../../services/git.js';
 
 export const versionCommand = defineCommand({
   meta: { name: 'version', description: 'Bump package versions without publishing' },
@@ -19,6 +20,14 @@ export const versionCommand = defineCommand({
     const pm = detectPackageManager(rootDir);
     const rawConfig = await loadConfigFromDir(rootDir);
     const config = rawConfig ? validateConfig(rawConfig, pm) : validateConfig({ publishFiles: ['lib'], stripScripts: true }, pm);
+
+    if (config.requireCleanGit && !args['ignore-git']) {
+      const git = new GitService(rootDir);
+      if (!await git.isWorkingTreeClean()) {
+        throw new Error('Working tree is not clean. Commit or stash changes, or use --ignore-git');
+      }
+    }
+
     const packages = await resolvePackages(rootDir, config, args.filter);
 
     const steps = buildPipeline('version', config);

@@ -40,6 +40,10 @@ export const determineVersionStep: PipelineStep<
     const bumps = new Map<string, VersionBump>();
     const changesets: Changeset[] | undefined = (ctx as any).changesets;
 
+    if (ctx.config.changesets.enabled && !changesets?.length && ctx.mode === 'ci') {
+      throw new Error('No changesets found. Add a changeset before publishing in CI mode, or use --bump to override.');
+    }
+
     if (ctx.config.changesets.enabled && changesets?.length) {
       const bumpTypes = new Map<string, 'patch' | 'minor' | 'major'>();
 

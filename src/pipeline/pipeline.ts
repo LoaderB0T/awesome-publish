@@ -4,15 +4,17 @@ import type { PipelineStep } from './step.js';
 import type { CoreContext } from './context.js';
 
 let activeTempDirs: string[] = [];
+let cleanupRegistered = false;
 
 function registerCleanupHandler() {
+  if (cleanupRegistered) return;
+  cleanupRegistered = true;
   const cleanup = () => {
     for (const dir of activeTempDirs) {
       try { rmSync(dir, { recursive: true, force: true }); } catch {}
     }
   };
-  process.on('SIGINT', () => { cleanup(); process.exit(130); });
-  process.on('exit', cleanup);
+  process.once('SIGINT', () => { cleanup(); process.exit(130); });
 }
 
 export interface PipelineResult {
