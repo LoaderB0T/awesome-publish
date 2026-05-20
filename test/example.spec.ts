@@ -1,4 +1,4 @@
-import { describe, expect, test, beforeEach, afterEach } from '@jest/globals';
+import { describe, expect, test, beforeEach, afterEach } from 'vitest';
 
 describe('Test Suite', () => {
   beforeEach(() => {
@@ -9,9 +9,8 @@ describe('Test Suite', () => {
     console.log('afterEach');
   });
 
-  test('Test case', done => {
+  test('Test case', () => {
     console.log('test');
     expect(true).toBe(true);
-    done();
   });
 });
