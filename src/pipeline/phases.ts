@@ -2,6 +2,7 @@ export const Phases = {
   READ_CHANGESETS: 'read-changesets',
   CONSUME_CHANGESETS: 'consume-changesets',
   DETERMINE_VERSION: 'determine-version',
+  WRITE_VERSIONS: 'write-versions',
   AI_NOTES_GENERATE: 'ai-notes-generate',
   BUILD_TEMP_DIR: 'build-temp-dir',
   MODIFY_PACKAGE_JSON: 'modify-package-json',
