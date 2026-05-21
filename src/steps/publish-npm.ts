@@ -61,7 +61,6 @@ export const publishNpmStep: PipelineStep<TempDirContext & VersionContext, Publi
         const msg = error?.message ?? String(error);
         debug('publish-npm', `${pkg.name} publish error`, msg);
         if (msg.includes('403') || msg.includes('409') || msg.includes('previously published')) {
-          console.warn(`⚠ ${pkg.name}@${version} already exists on registry, skipping`);
           debug('publish-npm', `${pkg.name}@${version} already exists, skipping`);
           results.set(pkg.name, {
             packageName: pkg.name,

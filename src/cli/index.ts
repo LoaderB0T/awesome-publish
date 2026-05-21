@@ -4,6 +4,7 @@ import { publishCommand } from './commands/publish.js';
 import { packCommand } from './commands/pack.js';
 import { versionCommand } from './commands/version.js';
 import { initCommand } from './commands/init.js';
+import { changesetCommand } from './commands/changeset.js';
 
 const main = defineCommand({
   meta: {
@@ -16,6 +17,7 @@ const main = defineCommand({
     pack: packCommand,
     version: versionCommand,
     init: initCommand,
+    changeset: changesetCommand,
   },
 });
 

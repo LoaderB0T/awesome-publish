@@ -50,6 +50,17 @@ export class GitService {
     return stdout.trim().split('\n').filter(Boolean);
   }
 
+  async getChangedFilesSince(branch: string): Promise<string[]> {
+    try {
+      const { stdout } = await this.exec('git', ['diff', '--name-only', `${branch}...HEAD`]);
+      return stdout.trim().split('\n').filter(Boolean);
+    } catch {
+      // Fallback: branch might not exist, try without three-dot
+      const { stdout } = await this.exec('git', ['diff', '--name-only', branch]);
+      return stdout.trim().split('\n').filter(Boolean);
+    }
+  }
+
   private async exec(cmd: string, args: string[]): Promise<{ stdout: string; stderr: string }> {
     return execFileAsync(cmd, args, { cwd: this.cwd });
   }

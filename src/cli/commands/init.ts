@@ -1,5 +1,5 @@
 import { defineCommand } from 'citty';
-import { writeFileSync, mkdirSync, existsSync, readFileSync } from 'node:fs';
+import { readFile, writeFile, mkdir, access } from 'node:fs/promises';
 import { join } from 'node:path';
 import { AwesomeLogger } from 'awesome-logging';
 import { generateConfigFile } from '../../templates/config-template.js';
@@ -9,13 +9,22 @@ import { detectPackageManager } from '../../services/package-manager.js';
 import { setDebug, debug } from '../../services/debug.js';
 import type { ResolvedConfig } from '../../types/config.js';
 
-function isMonorepo(rootDir: string): boolean {
+async function exists(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function isMonorepo(rootDir: string): Promise<boolean> {
   const pkgPath = join(rootDir, 'package.json');
-  if (existsSync(pkgPath)) {
-    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+  if (await exists(pkgPath)) {
+    const pkg = JSON.parse(await readFile(pkgPath, 'utf-8'));
     if (Array.isArray(pkg.workspaces) && pkg.workspaces.length > 0) return true;
   }
-  return existsSync(join(rootDir, 'pnpm-workspace.yaml'));
+  return exists(join(rootDir, 'pnpm-workspace.yaml'));
 }
 
 export const initCommand = defineCommand({
@@ -34,7 +43,7 @@ export const initCommand = defineCommand({
     console.log('Setting up awesome-publish...\n');
     console.log(`Detected package manager: ${pm}`);
 
-    const mono = isMonorepo(rootDir);
+    const mono = await isMonorepo(rootDir);
     if (mono) {
       console.log('Detected monorepo workspace\n');
     } else {
@@ -167,12 +176,12 @@ export const initCommand = defineCommand({
         : []),
     ];
 
-    const checklist = AwesomeLogger.log('checklist', { items });
+    const checklist = AwesomeLogger.log('checklist', { items, logAllFinalStates: true });
 
     // Config file
     checklist.changeState(0, 'inProgress');
     const configContent = generateConfigFile(config);
-    writeFileSync(join(rootDir, 'awesome-publish.config.ts'), configContent);
+    await writeFile(join(rootDir, 'awesome-publish.config.ts'), configContent);
     checklist.changeState(0, 'succeeded');
 
     let idx = 1;
@@ -181,10 +190,10 @@ export const initCommand = defineCommand({
     if (writeWorkflow) {
       checklist.changeState(idx, 'inProgress');
       const workflowDir = join(rootDir, '.github', 'workflows');
-      if (!existsSync(workflowDir)) {
-        mkdirSync(workflowDir, { recursive: true });
+      if (!await exists(workflowDir)) {
+        await mkdir(workflowDir, { recursive: true });
       }
-      writeFileSync(join(workflowDir, 'publish.yml'), generatePublishWorkflow(pm));
+      await writeFile(join(workflowDir, 'publish.yml'), generatePublishWorkflow(pm));
       checklist.changeState(idx, 'succeeded');
       idx++;
     }
@@ -193,10 +202,10 @@ export const initCommand = defineCommand({
     if (writeChangesetCheck) {
       checklist.changeState(idx, 'inProgress');
       const workflowDir = join(rootDir, '.github', 'workflows');
-      if (!existsSync(workflowDir)) {
-        mkdirSync(workflowDir, { recursive: true });
+      if (!await exists(workflowDir)) {
+        await mkdir(workflowDir, { recursive: true });
       }
-      writeFileSync(join(workflowDir, 'changeset-check.yml'), generateChangesetCheckWorkflow());
+      await writeFile(join(workflowDir, 'changeset-check.yml'), generateChangesetCheckWorkflow());
       checklist.changeState(idx, 'succeeded');
     }
 

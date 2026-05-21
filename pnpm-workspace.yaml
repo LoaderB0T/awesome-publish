@@ -3,4 +3,4 @@ allowBuilds:
   esbuild: true
   unrs-resolver: false
 minimumReleaseAgeExclude:
-  - awesome-logging@2.1.1
+  - awesome-logging@3.0.0-pre2
