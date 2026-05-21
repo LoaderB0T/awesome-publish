@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { Phases } from '../pipeline/phases.js';
 import type { PipelineStep } from '../pipeline/step.js';
 import type { VersionContext } from '../pipeline/context.js';
+import { debug } from '../services/debug.js';
 
 export const writeVersionsStep: PipelineStep<VersionContext> = {
   name: 'write-versions',
@@ -19,6 +20,7 @@ export const writeVersionsStep: PipelineStep<VersionContext> = {
       if (!bump) continue;
 
       const pkgJsonPath = join(pkg.dir, 'package.json');
+      debug('write-versions', `${pkg.name}: writing ${bump.to} to ${pkgJsonPath}`);
       const pkgJson = JSON.parse(readFileSync(pkgJsonPath, 'utf-8'));
       pkgJson.version = bump.to;
       writeFileSync(pkgJsonPath, JSON.stringify(pkgJson, null, 2) + '\n');

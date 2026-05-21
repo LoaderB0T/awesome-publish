@@ -2,6 +2,7 @@ import { rmSync } from 'node:fs';
 import { Phases } from '../pipeline/phases.js';
 import type { PipelineStep } from '../pipeline/step.js';
 import type { TempDirContext } from '../pipeline/context.js';
+import { debug } from '../services/debug.js';
 
 export const cleanupStep: PipelineStep<Partial<TempDirContext>> = {
   name: 'cleanup',
@@ -13,8 +14,10 @@ export const cleanupStep: PipelineStep<Partial<TempDirContext>> = {
 
   async execute(ctx): Promise<void> {
     if (!ctx.tempDirs) return;
-    for (const [, dir] of ctx.tempDirs) {
+    for (const [name, dir] of ctx.tempDirs) {
+      debug('cleanup', `removing ${name}: ${dir}`);
       rmSync(dir, { recursive: true, force: true });
     }
+    debug('cleanup', `removed ${ctx.tempDirs.size} temp dirs`);
   },
 };

@@ -4,6 +4,7 @@ import { Phases } from '../pipeline/phases.js';
 import type { PipelineStep } from '../pipeline/step.js';
 import type { ChangesetContext } from '../pipeline/context.js';
 import type { Changeset } from '../types/changeset.js';
+import { debug } from '../services/debug.js';
 
 function parseChangesetFile(filePath: string): Changeset | null {
   const content = readFileSync(filePath, 'utf-8');
@@ -39,21 +40,30 @@ export const readChangesetsStep: PipelineStep<{ rootDir: string }, ChangesetCont
 
   async execute(ctx): Promise<ChangesetContext> {
     const changesetDir = join(ctx.rootDir, '.changeset');
+    debug('read-changesets', 'looking in', changesetDir);
 
     if (!existsSync(changesetDir)) {
+      debug('read-changesets', 'no .changeset directory found');
       return { changesets: [] };
     }
 
     const files = readdirSync(changesetDir).filter(
       (f) => f.endsWith('.md') && f !== 'README.md',
     );
+    debug('read-changesets', 'found changeset files', files);
 
     const changesets: Changeset[] = [];
     for (const file of files) {
       const parsed = parseChangesetFile(join(changesetDir, file));
-      if (parsed) changesets.push(parsed);
+      if (parsed) {
+        debug('read-changesets', 'parsed changeset', parsed.id, parsed.releases);
+        changesets.push(parsed);
+      } else {
+        debug('read-changesets', 'skipped invalid changeset', file);
+      }
     }
 
+    debug('read-changesets', `total: ${changesets.length} changesets`);
     return { changesets };
   },
 };

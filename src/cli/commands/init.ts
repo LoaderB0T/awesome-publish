@@ -6,6 +6,7 @@ import { generateConfigFile } from '../../templates/config-template.js';
 import { generatePublishWorkflow } from '../../templates/github-actions.js';
 import { generateChangesetCheckWorkflow } from '../../templates/changeset-check.js';
 import { detectPackageManager } from '../../services/package-manager.js';
+import { setDebug, debug } from '../../services/debug.js';
 import type { ResolvedConfig } from '../../types/config.js';
 
 function isMonorepo(rootDir: string): boolean {
@@ -19,10 +20,16 @@ function isMonorepo(rootDir: string): boolean {
 
 export const initCommand = defineCommand({
   meta: { name: 'init', description: 'Initialize awesome-publish configuration' },
-  args: {},
-  async run() {
+  args: {
+    debug: { type: 'boolean' as const, description: 'Enable verbose debug logging' },
+  },
+  async run({ args }) {
+    if (args.debug) setDebug(true);
+
     const rootDir = process.cwd();
     const pm = detectPackageManager(rootDir);
+    debug('init', 'rootDir', rootDir);
+    debug('init', 'package manager', pm);
 
     console.log('Setting up awesome-publish...\n');
     console.log(`Detected package manager: ${pm}`);
@@ -33,6 +40,8 @@ export const initCommand = defineCommand({
     } else {
       console.log('');
     }
+
+    // --- Prompts ---
 
     const publishFilesInput = await AwesomeLogger.prompt('text', {
       text: 'Which files/dirs to include in published package?',
@@ -121,6 +130,21 @@ export const initCommand = defineCommand({
       }
     }
 
+    const writeWorkflow = await AwesomeLogger.prompt('confirm', {
+      text: 'Generate GitHub Actions publish workflow?',
+      default: 'yes',
+    }).result;
+
+    let writeChangesetCheck = false;
+    if (changesetsEnabled && enforceInPR) {
+      writeChangesetCheck = await AwesomeLogger.prompt('confirm', {
+        text: 'Generate changeset enforcement workflow?',
+        default: 'yes',
+      }).result;
+    }
+
+    // --- Build config ---
+
     const config: Partial<ResolvedConfig> = {
       publishFiles,
       stripScripts,
@@ -131,39 +155,52 @@ export const initCommand = defineCommand({
       aiReleaseNotes: { enabled: aiNotesEnabled },
     };
 
+    // --- Write files with checklist progress ---
+
+    const items = [
+      { text: 'Write awesome-publish.config.ts', state: 'pending' as const },
+      ...(writeWorkflow
+        ? [{ text: 'Write .github/workflows/publish.yml', state: 'pending' as const }]
+        : []),
+      ...(writeChangesetCheck
+        ? [{ text: 'Write .github/workflows/changeset-check.yml', state: 'pending' as const }]
+        : []),
+    ];
+
+    const checklist = AwesomeLogger.log('checklist', { items });
+
+    // Config file
+    checklist.changeState(0, 'inProgress');
     const configContent = generateConfigFile(config);
     writeFileSync(join(rootDir, 'awesome-publish.config.ts'), configContent);
-    console.log('\nCreated awesome-publish.config.ts');
+    checklist.changeState(0, 'succeeded');
 
-    const writeWorkflow = await AwesomeLogger.prompt('confirm', {
-      text: 'Generate GitHub Actions publish workflow?',
-      default: 'yes',
-    }).result;
+    let idx = 1;
 
+    // Publish workflow
     if (writeWorkflow) {
+      checklist.changeState(idx, 'inProgress');
       const workflowDir = join(rootDir, '.github', 'workflows');
       if (!existsSync(workflowDir)) {
         mkdirSync(workflowDir, { recursive: true });
       }
       writeFileSync(join(workflowDir, 'publish.yml'), generatePublishWorkflow(pm));
-      console.log('Created .github/workflows/publish.yml');
+      checklist.changeState(idx, 'succeeded');
+      idx++;
     }
 
-    if (changesetsEnabled && enforceInPR) {
-      const writeChangesetCheck = await AwesomeLogger.prompt('confirm', {
-        text: 'Generate changeset enforcement workflow?',
-        default: 'yes',
-      }).result;
-
-      if (writeChangesetCheck) {
-        const workflowDir = join(rootDir, '.github', 'workflows');
-        if (!existsSync(workflowDir)) {
-          mkdirSync(workflowDir, { recursive: true });
-        }
-        writeFileSync(join(workflowDir, 'changeset-check.yml'), generateChangesetCheckWorkflow());
-        console.log('Created .github/workflows/changeset-check.yml');
+    // Changeset check workflow
+    if (writeChangesetCheck) {
+      checklist.changeState(idx, 'inProgress');
+      const workflowDir = join(rootDir, '.github', 'workflows');
+      if (!existsSync(workflowDir)) {
+        mkdirSync(workflowDir, { recursive: true });
       }
+      writeFileSync(join(workflowDir, 'changeset-check.yml'), generateChangesetCheckWorkflow());
+      checklist.changeState(idx, 'succeeded');
     }
+
+    checklist.end();
 
     console.log('\nDone! Edit awesome-publish.config.ts to customize.');
     if (aiNotesEnabled) {

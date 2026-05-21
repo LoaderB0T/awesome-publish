@@ -7,6 +7,7 @@ export interface CoreContext {
   packages: PackageInfo[];
   mode: 'interactive' | 'ci';
   dryRun: boolean;
+  debug: boolean;
 }
 
 export interface ChangesetContext {

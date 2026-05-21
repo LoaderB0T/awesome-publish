@@ -1,11 +1,9 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { execFile } from 'node:child_process';
+import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
 
-const execFileAsync = promisify(execFile);
-
-const shellOpts = process.platform === 'win32' ? { shell: true } : {};
+const execAsync = promisify(exec);
 
 export type PackageManagerName = 'npm' | 'yarn' | 'pnpm';
 
@@ -17,30 +15,34 @@ export function detectPackageManager(dir: string): PackageManagerName {
 }
 
 export interface PackageManagerAdapter {
-  publish(dir: string, tag?: string): Promise<void>;
+  publish(dir: string, tag?: string, otp?: string): Promise<void>;
   pack(dir: string, outDir: string): Promise<string>;
 }
 
-function buildPublishArgs(pm: PackageManagerName, dir: string, tag?: string): { cmd: string; args: string[] } {
-  const args = ['publish', dir];
-  if (tag) args.push('--tag', tag);
-  args.push('--no-git-checks');
-  return { cmd: pm, args };
+function quote(s: string): string {
+  if (/^[\w./@:-]+$/.test(s)) return s;
+  return `"${s.replace(/"/g, '\\"')}"`;
 }
 
-function buildPackArgs(_pm: PackageManagerName, _dir: string, outDir: string): { cmd: string; args: string[] } {
-  return { cmd: _pm, args: ['pack', '--pack-destination', outDir] };
+function buildPublishCmd(pm: PackageManagerName, dir: string, tag?: string, otp?: string): string {
+  const parts = [pm, 'publish', quote(dir)];
+  if (tag) parts.push('--tag', quote(tag));
+  if (otp) parts.push('--otp', quote(otp));
+  parts.push('--no-git-checks');
+  return parts.join(' ');
+}
+
+function buildPackCmd(pm: PackageManagerName, outDir: string): string {
+  return [pm, 'pack', '--pack-destination', quote(outDir)].join(' ');
 }
 
 export function createAdapter(pm: PackageManagerName): PackageManagerAdapter {
   return {
-    async publish(dir: string, tag?: string): Promise<void> {
-      const { cmd, args } = buildPublishArgs(pm, dir, tag);
-      await execFileAsync(cmd, args, { cwd: dir, ...shellOpts });
+    async publish(dir: string, tag?: string, otp?: string): Promise<void> {
+      await execAsync(buildPublishCmd(pm, dir, tag, otp), { cwd: dir });
     },
     async pack(dir: string, outDir: string): Promise<string> {
-      const { cmd, args } = buildPackArgs(pm, dir, outDir);
-      const { stdout } = await execFileAsync(cmd, args, { cwd: dir, ...shellOpts });
+      const { stdout } = await execAsync(buildPackCmd(pm, outDir), { cwd: dir });
       return stdout.trim();
     },
   };

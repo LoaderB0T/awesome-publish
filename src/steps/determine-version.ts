@@ -3,6 +3,7 @@ import type { PipelineStep } from '../pipeline/step.js';
 import type { ChangesetContext, VersionContext } from '../pipeline/context.js';
 import type { VersionBump } from '../types/package-info.js';
 import type { Changeset } from '../types/changeset.js';
+import { debug } from '../services/debug.js';
 
 const BUMP_ORDER = { patch: 0, minor: 1, major: 2 } as const;
 
@@ -40,6 +41,10 @@ export const determineVersionStep: PipelineStep<
     const bumps = new Map<string, VersionBump>();
     const changesets: Changeset[] | undefined = (ctx as any).changesets;
 
+    debug('determine-version', 'changesets enabled', ctx.config.changesets.enabled);
+    debug('determine-version', 'changeset count', changesets?.length ?? 0);
+    debug('determine-version', 'cli bump arg', (ctx as any).cliArgs?.bump);
+
     if (ctx.config.changesets.enabled && !changesets?.length && ctx.mode === 'ci') {
       throw new Error('No changesets found. Add a changeset before publishing in CI mode, or use --bump to override.');
     }
@@ -53,16 +58,19 @@ export const determineVersionStep: PipelineStep<
           bumpTypes.set(release.name, existing ? highestBump(existing, release.type) : release.type);
         }
       }
+      debug('determine-version', 'bump types from changesets', bumpTypes);
 
       for (const pkg of ctx.packages) {
         const type = bumpTypes.get(pkg.name);
         if (type) {
-          bumps.set(pkg.name, {
+          const bump = {
             packageName: pkg.name,
             from: pkg.version,
             to: bumpVersion(pkg.version, type),
             type,
-          });
+          };
+          debug('determine-version', `${pkg.name}: ${bump.from} → ${bump.to} (${type})`);
+          bumps.set(pkg.name, bump);
         }
       }
     } else {
@@ -72,17 +80,21 @@ export const determineVersionStep: PipelineStep<
       }
 
       if (bumpType) {
+        debug('determine-version', 'using cli bump type', bumpType);
         for (const pkg of ctx.packages) {
-          bumps.set(pkg.name, {
+          const bump = {
             packageName: pkg.name,
             from: pkg.version,
             to: bumpVersion(pkg.version, bumpType),
             type: bumpType,
-          });
+          };
+          debug('determine-version', `${pkg.name}: ${bump.from} → ${bump.to} (${bumpType})`);
+          bumps.set(pkg.name, bump);
         }
       }
     }
 
+    debug('determine-version', `total bumps: ${bumps.size}`);
     return { versionBumps: bumps };
   },
 };
