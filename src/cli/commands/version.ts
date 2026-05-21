@@ -42,7 +42,7 @@ export const versionCommand = defineCommand({
 
     const result = await runPipeline(steps, ctx as any);
     if (result.status === 'failed') {
-      console.error(`Version failed at: ${result.failed}`);
+      console.error(`Version failed at: ${result.failed}\n${result.error?.message ?? ''}`);
       process.exit(1);
     }
     console.log('\nVersion bump complete!');

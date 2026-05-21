@@ -5,6 +5,8 @@ import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 
+const shellOpts = process.platform === 'win32' ? { shell: true } : {};
+
 export type PackageManagerName = 'npm' | 'yarn' | 'pnpm';
 
 export function detectPackageManager(dir: string): PackageManagerName {
@@ -34,11 +36,11 @@ export function createAdapter(pm: PackageManagerName): PackageManagerAdapter {
   return {
     async publish(dir: string, tag?: string): Promise<void> {
       const { cmd, args } = buildPublishArgs(pm, dir, tag);
-      await execFileAsync(cmd, args, { cwd: dir });
+      await execFileAsync(cmd, args, { cwd: dir, ...shellOpts });
     },
     async pack(dir: string, outDir: string): Promise<string> {
       const { cmd, args } = buildPackArgs(pm, dir, outDir);
-      const { stdout } = await execFileAsync(cmd, args, { cwd: dir });
+      const { stdout } = await execFileAsync(cmd, args, { cwd: dir, ...shellOpts });
       return stdout.trim();
     },
   };

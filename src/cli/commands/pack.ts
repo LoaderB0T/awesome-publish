@@ -43,7 +43,7 @@ export const packCommand = defineCommand({
 
     const result = await runPipeline(steps, ctx as any);
     if (result.status === 'failed') {
-      console.error(`Pack failed at: ${result.failed}`);
+      console.error(`Pack failed at: ${result.failed}\n${result.error?.message ?? ''}`);
       process.exit(1);
     }
     console.log(`\nPacked to: ${args.out}`);
