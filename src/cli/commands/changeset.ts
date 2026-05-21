@@ -34,7 +34,7 @@ export const changesetCommand = defineCommand({
   args: {
     debug: { type: 'boolean' as const, description: 'Enable verbose debug logging' },
     branch: { type: 'string' as const, description: 'Base branch to compare against', default: 'main' },
-    all: { type: 'boolean' as const, description: 'Show all packages instead of only git-changed ones' },
+    'ignore-git': { type: 'boolean' as const, description: 'Show all packages instead of only git-changed ones' },
   },
   async run({ args }) {
     if (args.debug) setDebug(true);
@@ -51,8 +51,8 @@ export const changesetCommand = defineCommand({
 
     let changedPackages;
 
-    if (args.all) {
-      debug('changeset', '--all flag, showing all packages');
+    if (args['ignore-git']) {
+      debug('changeset', '--ignore-git flag, showing all packages');
       changedPackages = packages;
     } else {
       // Find changed files since base branch
