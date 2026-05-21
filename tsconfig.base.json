@@ -11,6 +11,7 @@
     "resolveJsonModule": true,
     "strictPropertyInitialization": true,
     "moduleResolution": "nodenext",
-    "stripInternal": true
+    "stripInternal": true,
+    "skipLibCheck": true
   }
 }

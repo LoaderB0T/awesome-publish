@@ -6,7 +6,7 @@ export function generateConfigFile(config: Partial<ResolvedConfig>): string {
     ``,
     `export default defineConfig({`,
     `  publishFiles: ${JSON.stringify(config.publishFiles ?? ['lib'])},`,
-    `  stripScripts: true,`,
+    `  stripScripts: ${config.stripScripts ?? true},`,
   ];
 
   if (config.packageManager) {
