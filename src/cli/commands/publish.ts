@@ -59,7 +59,7 @@ export const publishCommand = defineCommand({
       dryRun,
       debug: args.debug ?? false,
       rootDir,
-      cliArgs: { bump: args.bump, tag: args.tag, otp: args.otp },
+      cliArgs: { bump: args.bump, tag: args.tag, otp: args.otp, registry: args.registry },
     };
 
     const result = await runPipeline(steps, ctx as any);

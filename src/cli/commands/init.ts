@@ -159,7 +159,7 @@ export const initCommand = defineCommand({
       stripScripts,
       packageManager: pm,
       changesets: { enabled: changesetsEnabled, enforceInPR },
-      github: { releases: { enabled: githubReleasesEnabled, mode: releaseMode } },
+      github: { releases: { enabled: githubReleasesEnabled, mode: releaseMode, draft: false } },
       aiProvider,
       aiReleaseNotes: { enabled: aiNotesEnabled },
     };

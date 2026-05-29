@@ -10,7 +10,7 @@ export class GitHubService {
     this.baseUrl = `https://api.github.com/repos/${owner}/${repo}`;
   }
 
-  async createRelease(tag: string, body?: string): Promise<{ id: number }> {
+  async createRelease(tag: string, body?: string, draft = false): Promise<{ id: number }> {
     const response = await this.fetchFn(`${this.baseUrl}/releases`, {
       method: 'POST',
       headers: this.headers(),
@@ -18,7 +18,7 @@ export class GitHubService {
         tag_name: tag,
         name: tag,
         body: body ?? '',
-        draft: false,
+        draft,
         prerelease: false,
       }),
     });

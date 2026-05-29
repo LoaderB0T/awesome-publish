@@ -26,12 +26,14 @@ export const createGithubReleaseStep: PipelineStep<PublishContext & VersionConte
     const github = new GitHubService(owner, repo, token);
 
     const releaseIds = new Map<string, number>();
+    const draft = ctx.config.github.releases.draft;
+    debug('github-release', 'draft', draft);
 
     if (ctx.config.github.releases.mode === 'combined') {
       const body = buildCombinedReleaseBody(ctx);
       const tag = `release-${new Date().toISOString().slice(0, 10)}`;
       debug('github-release', `creating combined release: ${tag}`);
-      const { id } = await github.createRelease(tag, body);
+      const { id } = await github.createRelease(tag, body, draft);
       debug('github-release', `created combined release id=${id}`);
       releaseIds.set('combined', id);
     } else {
@@ -44,7 +46,7 @@ export const createGithubReleaseStep: PipelineStep<PublishContext & VersionConte
         const body = latestTag
           ? (await git.getCommitsSinceTag(latestTag)).map(c => `- ${c.message}`).join('\n')
           : '';
-        const { id } = await github.createRelease(tag, body);
+        const { id } = await github.createRelease(tag, body, draft);
         debug('github-release', `created release ${pkg.name} id=${id}`);
         releaseIds.set(pkg.name, id);
       }

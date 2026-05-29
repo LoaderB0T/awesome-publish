@@ -5,6 +5,7 @@ import { packCommand } from './commands/pack.js';
 import { versionCommand } from './commands/version.js';
 import { initCommand } from './commands/init.js';
 import { changesetCommand } from './commands/changeset.js';
+import { statusCommand } from './commands/status.js';
 
 const main = defineCommand({
   meta: {
@@ -18,6 +19,7 @@ const main = defineCommand({
     version: versionCommand,
     init: initCommand,
     changeset: changesetCommand,
+    status: statusCommand,
   },
 });
 

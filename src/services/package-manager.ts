@@ -15,7 +15,7 @@ export function detectPackageManager(dir: string): PackageManagerName {
 }
 
 export interface PackageManagerAdapter {
-  publish(dir: string, tag?: string, otp?: string): Promise<void>;
+  publish(dir: string, tag?: string, otp?: string, registry?: string): Promise<void>;
   pack(dir: string, outDir: string): Promise<string>;
 }
 
@@ -24,10 +24,13 @@ function quote(s: string): string {
   return `"${s.replace(/"/g, '\\"')}"`;
 }
 
-function buildPublishCmd(pm: PackageManagerName, dir: string, tag?: string, otp?: string): string {
+function buildPublishCmd(pm: PackageManagerName, dir: string, tag?: string, otp?: string, registry?: string): string {
   const parts = [pm, 'publish', quote(dir)];
   if (tag) parts.push('--tag', quote(tag));
   if (otp) parts.push('--otp', quote(otp));
+  if (registry && registry !== 'https://registry.npmjs.org') {
+    parts.push('--registry', quote(registry));
+  }
   parts.push('--no-git-checks');
   return parts.join(' ');
 }
@@ -38,8 +41,8 @@ function buildPackCmd(pm: PackageManagerName, outDir: string): string {
 
 export function createAdapter(pm: PackageManagerName): PackageManagerAdapter {
   return {
-    async publish(dir: string, tag?: string, otp?: string): Promise<void> {
-      await execAsync(buildPublishCmd(pm, dir, tag, otp), { cwd: dir });
+    async publish(dir: string, tag?: string, otp?: string, registry?: string): Promise<void> {
+      await execAsync(buildPublishCmd(pm, dir, tag, otp, registry), { cwd: dir });
     },
     async pack(dir: string, outDir: string): Promise<string> {
       const { stdout } = await execAsync(buildPackCmd(pm, outDir), { cwd: dir });

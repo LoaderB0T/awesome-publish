@@ -25,12 +25,16 @@ const STEP_LABELS: Record<string, string> = {
   'read-changesets': 'Read changesets',
   'consume-changesets': 'Consume changesets',
   'determine-version': 'Determine version',
+  'confirm-publish': 'Confirm publish',
+  'sync-dependencies': 'Sync dependencies',
   'write-versions': 'Write versions',
+  'write-changelog': 'Write changelog',
   'ai-notes-generate': 'Generate AI release notes',
   'build-temp-dir': 'Build temp directory',
   'modify-package-json': 'Modify package.json',
   'publish-npm': 'Publish to npm',
   'pack-local': 'Pack locally',
+  'git-tag': 'Create git tags',
   'github-release': 'Create GitHub release',
   'ai-notes-publish': 'Publish AI notes to release',
   'cleanup': 'Cleanup',
@@ -117,6 +121,23 @@ function stepSummary(name: string, ctx: Record<string, unknown>): string {
     case 'ai-notes-publish': {
       const notes = ctx.releaseNotes as Map<string, string> | undefined;
       return `${label}: ${notes?.size ?? 0} updated`;
+    }
+
+    case 'confirm-publish':
+      return `${label}: confirmed`;
+
+    case 'sync-dependencies': {
+      return label;
+    }
+
+    case 'write-changelog': {
+      const entries = ctx.changelogEntries as Map<string, string> | undefined;
+      return `${label}: ${entries?.size ?? 0} packages`;
+    }
+
+    case 'git-tag': {
+      const bumps2 = ctx.versionBumps as Map<string, VersionBump> | undefined;
+      return `${label}: ${bumps2?.size ?? 0} tags`;
     }
 
     case 'cleanup': {

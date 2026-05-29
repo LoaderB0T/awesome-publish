@@ -15,16 +15,38 @@ export function normalizeConfig(
       ? { enabled: false }
       : raw.aiReleaseNotes;
 
+  const gitTag = raw.gitTag === true
+    ? { enabled: true, prefix: '' }
+    : raw.gitTag === false
+      ? { enabled: false, prefix: '' }
+      : raw.gitTag == null
+        ? { ...DEFAULT_CONFIG.gitTag }
+        : { enabled: raw.gitTag.enabled, prefix: raw.gitTag.prefix ?? '' };
+
+  const changelog = raw.changelog === true
+    ? { enabled: true, file: 'CHANGELOG.md' }
+    : raw.changelog === false
+      ? { enabled: false, file: 'CHANGELOG.md' }
+      : raw.changelog == null
+        ? { ...DEFAULT_CONFIG.changelog }
+        : { enabled: raw.changelog.enabled, file: raw.changelog.file ?? 'CHANGELOG.md' };
+
   return {
     packageManager: raw.packageManager ?? detectedPackageManager,
+    registry: raw.registry ?? DEFAULT_CONFIG.registry,
     publishFiles: raw.publishFiles,
     stripScripts: raw.stripScripts,
     requireCleanGit: raw.requireCleanGit ?? DEFAULT_CONFIG.requireCleanGit,
+    gitTag,
+    changelog,
+    conventionalCommits: raw.conventionalCommits ?? DEFAULT_CONFIG.conventionalCommits,
+    confirmPublish: raw.confirmPublish ?? DEFAULT_CONFIG.confirmPublish,
+    syncDependencies: raw.syncDependencies ?? DEFAULT_CONFIG.syncDependencies,
     changesets: raw.changesets
       ? { enabled: raw.changesets.enabled, enforceInPR: raw.changesets.enforceInPR ?? false }
       : { ...DEFAULT_CONFIG.changesets },
     github: raw.github?.releases
-      ? { releases: raw.github.releases }
+      ? { releases: { enabled: raw.github.releases.enabled, mode: raw.github.releases.mode, draft: raw.github.releases.draft ?? false } }
       : { ...DEFAULT_CONFIG.github },
     aiProvider: raw.aiProvider,
     aiReleaseNotes,

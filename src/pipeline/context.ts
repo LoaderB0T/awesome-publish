@@ -33,3 +33,7 @@ export interface PublishContext {
 export interface GithubReleaseContext {
   releaseIds: Map<string, number>;
 }
+
+export interface ChangelogContext {
+  changelogEntries: Map<string, string>;
+}

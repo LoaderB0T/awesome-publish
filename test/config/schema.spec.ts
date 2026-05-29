@@ -39,7 +39,7 @@ describe('normalizeConfig', () => {
       publishFiles: ['lib'],
       stripScripts: true,
     }, 'pnpm');
-    expect(result.github).toEqual({ releases: { enabled: false, mode: 'per-package' } });
+    expect(result.github).toEqual({ releases: { enabled: false, mode: 'per-package', draft: false } });
   });
 
   it('defaults requireCleanGit to true', () => {

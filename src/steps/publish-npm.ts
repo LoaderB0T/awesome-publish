@@ -35,7 +35,9 @@ export const publishNpmStep: PipelineStep<TempDirContext & VersionContext, Publi
     const otp = await resolveOtp(ctx);
     const tag = (ctx as any).cliArgs?.tag as string | undefined;
 
+    const registry = (ctx as any).cliArgs?.registry as string | undefined ?? ctx.config.registry;
     debug('publish-npm', 'package manager', ctx.config.packageManager);
+    debug('publish-npm', 'registry', registry);
     debug('publish-npm', 'otp provided', !!otp);
     debug('publish-npm', 'dist-tag', tag ?? 'latest');
 
@@ -49,12 +51,12 @@ export const publishNpmStep: PipelineStep<TempDirContext & VersionContext, Publi
       debug('publish-npm', `publishing ${pkg.name}@${version} from ${tempDir}`);
 
       try {
-        await adapter.publish(tempDir, tag, otp);
+        await adapter.publish(tempDir, tag, otp, registry);
         debug('publish-npm', `${pkg.name}@${version} published successfully`);
         results.set(pkg.name, {
           packageName: pkg.name,
           version,
-          registry: 'https://registry.npmjs.org',
+          registry,
           status: 'published',
         });
       } catch (error: any) {
@@ -65,7 +67,7 @@ export const publishNpmStep: PipelineStep<TempDirContext & VersionContext, Publi
           results.set(pkg.name, {
             packageName: pkg.name,
             version,
-            registry: 'https://registry.npmjs.org',
+            registry,
             status: 'skipped-already-exists',
           });
         } else {
