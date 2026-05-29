@@ -7,6 +7,7 @@ import { detectPackageManager } from '../../services/package-manager.js';
 import { resolvePackages } from '../../services/workspace.js';
 import { GitService } from '../../services/git.js';
 import { determineBumpFromCommits } from '../../services/conventional-commits.js';
+import { bumpVersion, highestBump } from '../../services/version.js';
 import { setDebug, debug } from '../../services/debug.js';
 import type { Changeset } from '../../types/changeset.js';
 
@@ -104,18 +105,13 @@ export const statusCommand = defineCommand({
         for (const cs of changesets) {
           for (const r of cs.releases) {
             const existing = bumpTypes.get(r.name);
-            if (!existing || ['major', 'minor'].indexOf(r.type) > ['major', 'minor'].indexOf(existing)) {
-              bumpTypes.set(r.name, r.type);
-            }
+            bumpTypes.set(r.name, existing ? highestBump(existing, r.type) : r.type);
           }
         }
         for (const pkg of packages) {
           const type = bumpTypes.get(pkg.name);
           if (type) {
-            const [major, minor, patch] = pkg.version.split('.').map(Number);
-            const newVersion = type === 'major' ? `${major + 1}.0.0`
-              : type === 'minor' ? `${major}.${minor + 1}.0`
-              : `${major}.${minor}.${patch + 1}`;
+            const newVersion = bumpVersion(pkg.version, type);
             console.log(`  ${pkg.name}: ${pkg.version} → ${newVersion} (${type})`);
           }
         }

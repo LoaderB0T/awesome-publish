@@ -72,9 +72,9 @@ export const changesetCommand = defineCommand({
 
       // Map changed files to packages
       changedPackages = packages.filter(pkg => {
-        const pkgRelDir = relative(rootDir, pkg.dir);
+        const pkgRelDir = relative(rootDir, pkg.dir).replace(/\\/g, '/');
         if (pkgRelDir === '' || pkgRelDir === '.') return changedFiles.length > 0;
-        return changedFiles.some(f => f.startsWith(pkgRelDir + '/') || f.startsWith(pkgRelDir + '\\'));
+        return changedFiles.some(f => f.replace(/\\/g, '/').startsWith(pkgRelDir + '/'));
       });
 
       debug('changeset', 'changed packages', changedPackages.map(p => p.name));

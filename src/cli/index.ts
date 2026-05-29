@@ -7,6 +7,14 @@ import { initCommand } from './commands/init.js';
 import { changesetCommand } from './commands/changeset.js';
 import { statusCommand } from './commands/status.js';
 
+// C6: Handle SIGTERM same as SIGINT for graceful shutdown
+for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+  process.on(signal, () => {
+    console.log(`\nReceived ${signal}, shutting down...`);
+    process.exit(130);
+  });
+}
+
 const main = defineCommand({
   meta: {
     name: 'awesome-publish',

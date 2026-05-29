@@ -33,7 +33,9 @@ export const publishNpmStep: PipelineStep<TempDirContext & VersionContext, Publi
     const adapter = createAdapter(ctx.config.packageManager);
     const results = new Map<string, PublishResult>();
     const otp = await resolveOtp(ctx);
-    const tag = (ctx as any).cliArgs?.tag as string | undefined;
+    // --tag explicit > --pre identifier > undefined (defaults to 'latest')
+    const tag = (ctx as any).cliArgs?.tag as string | undefined
+      ?? (ctx as any).cliArgs?.pre as string | undefined;
 
     const registry = (ctx as any).cliArgs?.registry as string | undefined ?? ctx.config.registry;
     debug('publish-npm', 'package manager', ctx.config.packageManager);
@@ -71,9 +73,23 @@ export const publishNpmStep: PipelineStep<TempDirContext & VersionContext, Publi
             status: 'skipped-already-exists',
           });
         } else {
-          throw error;
+          // C2: Record per-package failure instead of aborting entire publish
+          results.set(pkg.name, {
+            packageName: pkg.name,
+            version,
+            registry,
+            status: 'failed',
+            error: msg,
+          });
         }
       }
+    }
+
+    // If any packages failed, report them but don't throw — let pipeline continue for cleanup
+    const failed = [...results.values()].filter(r => r.status === 'failed');
+    if (failed.length > 0) {
+      const summary = failed.map(f => `  ${f.packageName}@${f.version}: ${f.error}`).join('\n');
+      console.error(`\nFailed to publish ${failed.length} package(s):\n${summary}`);
     }
 
     return { publishResults: results };

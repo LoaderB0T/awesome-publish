@@ -17,11 +17,15 @@ export async function loadConfigFromDir(dir: string): Promise<AwesomePublishConf
     const configPath = resolve(dir, name);
     if (existsSync(configPath)) {
       debug('config', 'found config file', configPath);
-      const jiti = createJiti(configPath, { interopDefault: true });
-      const mod = await jiti.import(configPath) as { default?: AwesomePublishConfig } | AwesomePublishConfig;
-      const config = ('default' in mod ? mod.default : mod) as AwesomePublishConfig | undefined;
-      debug('config', 'loaded config', config);
-      return config;
+      try {
+        const jiti = createJiti(configPath, { interopDefault: true });
+        const mod = await jiti.import(configPath) as { default?: AwesomePublishConfig } | AwesomePublishConfig;
+        const config = ('default' in mod ? mod.default : mod) as AwesomePublishConfig | undefined;
+        debug('config', 'loaded config', config);
+        return config;
+      } catch (error: any) {
+        throw new Error(`Failed to load config from ${configPath}: ${error?.message ?? error}`);
+      }
     }
   }
   debug('config', 'no config found in', dir);

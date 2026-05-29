@@ -6,31 +6,66 @@ import type { VersionBump } from '../types/package-info.js';
 import type { Changeset } from '../types/changeset.js';
 import { GitService } from '../services/git.js';
 import { determineBumpFromCommits } from '../services/conventional-commits.js';
+import {
+  bumpVersion,
+  highestBump,
+  validateBumpType,
+  stripPrerelease,
+  extractPreIdentifier,
+  resolvePreVersion,
+} from '../services/version.js';
 import { debug } from '../services/debug.js';
 
-const BUMP_ORDER = { patch: 0, minor: 1, major: 2 } as const;
+/**
+ * Apply prerelease suffix to all bumps. Handles the double-bump edge case:
+ * if current version is already a prerelease, uses the existing base version
+ * instead of re-bumping (which would double-bump).
+ *
+ * When current is stable → use bumpVersion result as base (normal flow)
+ * When current is prerelease with same identifier → keep same base, increment pre number
+ * When current is prerelease with different identifier → keep same base, new identifier (promote)
+ */
+async function applyPrerelease(
+  bumps: Map<string, VersionBump>,
+  preId: string,
+  registry: string,
+  dryRun: boolean,
+): Promise<void> {
+  for (const [name, bump] of bumps) {
+    let baseVersion: string;
 
-function bumpVersion(version: string, type: 'patch' | 'minor' | 'major'): string {
-  const [major, minor, patch] = version.split('.').map(Number);
-  switch (type) {
-    case 'major':
-      return `${major + 1}.0.0`;
-    case 'minor':
-      return `${major}.${minor + 1}.0`;
-    case 'patch':
-      return `${major}.${minor}.${patch + 1}`;
+    if (bump.from.includes('-')) {
+      // Current version is already a prerelease — use its base to avoid double-bump
+      // e.g. 1.1.0-beta.1 → base is 1.1.0 (NOT bumpVersion("1.1.0", type) which double-bumps)
+      baseVersion = stripPrerelease(bump.from);
+      const currentPreId = extractPreIdentifier(bump.from);
+      debug('determine-version', `${name}: current is pre (${currentPreId}), reusing base ${baseVersion}`);
+    } else {
+      // Stable → prerelease: use the bumped version as base
+      baseVersion = bump.to;
+      debug('determine-version', `${name}: stable → pre, base ${baseVersion}`);
+    }
+
+    try {
+      const preVersion = await resolvePreVersion(name, baseVersion, preId, registry);
+      debug('determine-version', `${name}: prerelease → ${preVersion}`);
+      bump.to = preVersion;
+    } catch (error: any) {
+      if (dryRun) {
+        // Fallback during dry-run if registry unreachable
+        console.warn(`⚠ ${name}: registry lookup failed, using .0 fallback — ${error?.message}`);
+        bump.to = `${baseVersion}-${preId}.0`;
+      } else {
+        throw error;
+      }
+    }
+
+    bump.prerelease = preId;
   }
 }
 
-function highestBump(
-  a: 'patch' | 'minor' | 'major',
-  b: 'patch' | 'minor' | 'major',
-): 'patch' | 'minor' | 'major' {
-  return BUMP_ORDER[a] >= BUMP_ORDER[b] ? a : b;
-}
-
 export const determineVersionStep: PipelineStep<
-  Partial<ChangesetContext> & { cliArgs?: { bump?: string }; rootDir: string },
+  Partial<ChangesetContext> & { cliArgs?: { bump?: string; pre?: string }; rootDir: string },
   VersionContext
 > = {
   name: 'determine-version',
@@ -43,13 +78,16 @@ export const determineVersionStep: PipelineStep<
   async execute(ctx): Promise<VersionContext> {
     const bumps = new Map<string, VersionBump>();
     const changesets: Changeset[] | undefined = (ctx as any).changesets;
+    const preId = (ctx as any).cliArgs?.pre as string | undefined;
+    const registry = (ctx as any).cliArgs?.registry as string | undefined ?? ctx.config.registry;
 
     debug('determine-version', 'changesets enabled', ctx.config.changesets.enabled);
     debug('determine-version', 'changeset count', changesets?.length ?? 0);
     debug('determine-version', 'cli bump arg', (ctx as any).cliArgs?.bump);
     debug('determine-version', 'conventional commits', ctx.config.conventionalCommits);
+    debug('determine-version', 'prerelease', preId ?? 'none');
 
-    if (ctx.config.changesets.enabled && !changesets?.length && ctx.mode === 'ci') {
+    if (ctx.config.changesets.enabled && !changesets?.length && ctx.mode === 'ci' && !preId) {
       throw new Error('No changesets found. Add a changeset before publishing in CI mode, or use --bump to override.');
     }
 
@@ -68,7 +106,7 @@ export const determineVersionStep: PipelineStep<
       for (const pkg of ctx.packages) {
         const type = bumpTypes.get(pkg.name);
         if (type) {
-          const bump = {
+          const bump: VersionBump = {
             packageName: pkg.name,
             from: pkg.version,
             to: bumpVersion(pkg.version, type),
@@ -78,15 +116,18 @@ export const determineVersionStep: PipelineStep<
           bumps.set(pkg.name, bump);
         }
       }
-      return { versionBumps: bumps };
+
+      if (preId) await applyPrerelease(bumps, preId, registry, ctx.dryRun);
+      return { versionBumps: bumps, isPrerelease: !!preId };
     }
 
     // 2. Explicit --bump flag
-    const bumpType = (ctx as any).cliArgs?.bump as 'patch' | 'minor' | 'major' | undefined;
-    if (bumpType) {
+    const rawBump = (ctx as any).cliArgs?.bump as string | undefined;
+    if (rawBump) {
+      const bumpType = validateBumpType(rawBump);
       debug('determine-version', 'using cli bump type', bumpType);
       for (const pkg of ctx.packages) {
-        const bump = {
+        const bump: VersionBump = {
           packageName: pkg.name,
           from: pkg.version,
           to: bumpVersion(pkg.version, bumpType),
@@ -95,7 +136,9 @@ export const determineVersionStep: PipelineStep<
         debug('determine-version', `${pkg.name}: ${bump.from} → ${bump.to} (${bumpType})`);
         bumps.set(pkg.name, bump);
       }
-      return { versionBumps: bumps };
+
+      if (preId) await applyPrerelease(bumps, preId, registry, ctx.dryRun);
+      return { versionBumps: bumps, isPrerelease: !!preId };
     }
 
     // 3. Conventional commits auto-detection
@@ -109,7 +152,7 @@ export const determineVersionStep: PipelineStep<
 
         const detected = determineBumpFromCommits(commits);
         if (detected) {
-          const bump = {
+          const bump: VersionBump = {
             packageName: pkg.name,
             from: pkg.version,
             to: bumpVersion(pkg.version, detected),
@@ -120,7 +163,10 @@ export const determineVersionStep: PipelineStep<
         }
       }
 
-      if (bumps.size > 0) return { versionBumps: bumps };
+      if (bumps.size > 0) {
+        if (preId) await applyPrerelease(bumps, preId, registry, ctx.dryRun);
+        return { versionBumps: bumps, isPrerelease: !!preId };
+      }
       debug('determine-version', 'no conventional commits matched bump types');
     }
 
@@ -147,7 +193,8 @@ export const determineVersionStep: PipelineStep<
       });
     }
 
+    if (preId) await applyPrerelease(bumps, preId, registry, ctx.dryRun);
     debug('determine-version', `total bumps: ${bumps.size}`);
-    return { versionBumps: bumps };
+    return { versionBumps: bumps, isPrerelease: !!preId };
   },
 };

@@ -1,3 +1,10 @@
+export interface CreateReleaseOptions {
+  tag: string;
+  body?: string;
+  draft?: boolean;
+  prerelease?: boolean;
+}
+
 export class GitHubService {
   private readonly baseUrl: string;
 
@@ -10,16 +17,16 @@ export class GitHubService {
     this.baseUrl = `https://api.github.com/repos/${owner}/${repo}`;
   }
 
-  async createRelease(tag: string, body?: string, draft = false): Promise<{ id: number }> {
+  async createRelease(options: CreateReleaseOptions): Promise<{ id: number }> {
     const response = await this.fetchFn(`${this.baseUrl}/releases`, {
       method: 'POST',
       headers: this.headers(),
       body: JSON.stringify({
-        tag_name: tag,
-        name: tag,
-        body: body ?? '',
-        draft,
-        prerelease: false,
+        tag_name: options.tag,
+        name: options.tag,
+        body: options.body ?? '',
+        draft: options.draft ?? false,
+        prerelease: options.prerelease ?? false,
       }),
     });
 

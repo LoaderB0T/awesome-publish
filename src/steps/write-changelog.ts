@@ -92,7 +92,7 @@ export const writeChangelogStep: PipelineStep<
   before: [Phases.BUILD_TEMP_DIR],
   hasSideEffects: true,
 
-  shouldRun: (ctx) => ctx.config.changelog.enabled && ctx.versionBumps?.size > 0,
+  shouldRun: (ctx) => ctx.config.changelog.enabled && ctx.versionBumps?.size > 0 && !ctx.isPrerelease,
 
   async execute(ctx): Promise<ChangelogContext> {
     const git = new GitService(ctx.rootDir);

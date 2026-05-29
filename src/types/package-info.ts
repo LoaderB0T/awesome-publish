@@ -13,11 +13,13 @@ export interface VersionBump {
   from: string;
   to: string;
   type: 'patch' | 'minor' | 'major';
+  prerelease?: string;
 }
 
 export interface PublishResult {
   packageName: string;
   version: string;
   registry: string;
-  status: 'published' | 'skipped-already-exists';
+  status: 'published' | 'skipped-already-exists' | 'failed';
+  error?: string;
 }

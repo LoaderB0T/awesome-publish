@@ -7,6 +7,7 @@ import { resolvePackages } from '../../services/workspace.js';
 import { buildPipeline } from '../../pipeline/build-pipeline.js';
 import { runPipeline } from '../../pipeline/pipeline.js';
 import { GitService } from '../../services/git.js';
+import { validatePreIdentifier } from '../../services/version.js';
 import { setDebug, debug } from '../../services/debug.js';
 
 export const publishCommand = defineCommand({
@@ -15,6 +16,7 @@ export const publishCommand = defineCommand({
     ...sharedArgs,
     bump: { type: 'string', description: 'Version bump type (patch|minor|major)' },
     tag: { type: 'string', description: 'npm dist-tag (e.g., next, beta)' },
+    pre: { type: 'string', description: 'Publish as prerelease (e.g. --pre beta, --pre alpha, --pre rc)' },
   },
   async run({ args }) {
     if (args.debug) setDebug(true);
@@ -22,6 +24,7 @@ export const publishCommand = defineCommand({
     const rootDir = process.cwd();
     const isCi = args.ci || !!process.env.CI || !!process.env.GITHUB_ACTIONS;
     const dryRun = args['dry-run'] ?? false;
+    const pre = args.pre ? validatePreIdentifier(args.pre) : undefined;
 
     debug('publish', 'rootDir', rootDir);
     debug('publish', 'ci', isCi, 'dryRun', dryRun);
@@ -35,10 +38,18 @@ export const publishCommand = defineCommand({
 
     if (config.requireCleanGit && !args['ignore-git']) {
       const git = new GitService(rootDir);
-      const clean = await git.isWorkingTreeClean();
-      debug('publish', 'git clean', clean);
-      if (!clean) {
-        throw new Error('Working tree is not clean. Commit or stash changes, or use --ignore-git');
+      try {
+        const clean = await git.isWorkingTreeClean();
+        debug('publish', 'git clean', clean);
+        if (!clean) {
+          throw new Error('Working tree is not clean. Commit or stash changes, or use --ignore-git');
+        }
+      } catch (error: any) {
+        // I4: Friendly error when not in a git repo
+        if (error?.message?.includes('not a git repository') || error?.stderr?.includes('not a git repository')) {
+          throw new Error('Not a git repository. Run "git init" first, or use --ignore-git to skip git checks');
+        }
+        throw error;
       }
     }
 
@@ -59,7 +70,7 @@ export const publishCommand = defineCommand({
       dryRun,
       debug: args.debug ?? false,
       rootDir,
-      cliArgs: { bump: args.bump, tag: args.tag, otp: args.otp, registry: args.registry },
+      cliArgs: { bump: args.bump, tag: args.tag, otp: args.otp, registry: args.registry, pre },
     };
 
     const result = await runPipeline(steps, ctx as any);

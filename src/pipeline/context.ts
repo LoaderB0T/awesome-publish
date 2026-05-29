@@ -16,6 +16,7 @@ export interface ChangesetContext {
 
 export interface VersionContext {
   versionBumps: Map<string, VersionBump>;
+  isPrerelease: boolean;
 }
 
 export interface TempDirContext {

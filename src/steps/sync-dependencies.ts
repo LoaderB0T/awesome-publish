@@ -14,7 +14,7 @@ export const syncDependenciesStep: PipelineStep<VersionContext> = {
   before: [Phases.WRITE_VERSIONS],
   hasSideEffects: true,
 
-  shouldRun: (ctx) => ctx.config.syncDependencies && ctx.versionBumps?.size > 0 && ctx.packages.length > 1,
+  shouldRun: (ctx) => ctx.config.syncDependencies && ctx.versionBumps?.size > 0 && ctx.packages.length > 1 && !ctx.isPrerelease,
 
   async execute(ctx): Promise<void> {
     const bumpedNames = new Map<string, string>();
@@ -34,6 +34,12 @@ export const syncDependenciesStep: PipelineStep<VersionContext> = {
         for (const [depName, currentRange] of Object.entries(deps)) {
           const newVersion = bumpedNames.get(depName);
           if (!newVersion) continue;
+
+          // I7: Skip workspace:* protocol ranges — pnpm resolves these automatically
+          if (currentRange.startsWith('workspace:')) {
+            debug('sync-dependencies', `${pkg.name}: skipping workspace protocol range ${depName}@${currentRange}`);
+            continue;
+          }
 
           // Preserve range prefix (^, ~, >=, etc.)
           const prefixMatch = currentRange.match(/^([~^>=<]*)/);

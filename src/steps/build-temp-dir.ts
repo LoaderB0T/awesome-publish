@@ -28,6 +28,7 @@ export const buildTempDirStep: PipelineStep<unknown, TempDirContext> = {
       for (const entry of pkg.config.publishFiles) {
         const src = resolve(pkg.dir, entry);
         if (!existsSync(src)) {
+          console.warn(`⚠ ${pkg.name}: publishFiles entry "${entry}" not found — skipping`);
           debug('build-temp-dir', `${pkg.name}: skipping missing publishFile "${entry}"`);
           continue;
         }

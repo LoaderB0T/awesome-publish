@@ -56,7 +56,14 @@ export async function resolvePackages(
 
   for (const dir of packageDirs) {
     const pkg = readPackageJson(dir);
-    const name = pkg.name as string;
+    const name = pkg.name as string | undefined;
+    const version = pkg.version as string | undefined;
+
+    // C3: Skip packages without name or version
+    if (!name || !version) continue;
+
+    // C4: Skip private packages (not publishable)
+    if (pkg.private === true) continue;
 
     if (filter && !matchesFilter(name, filter)) continue;
 
@@ -67,7 +74,7 @@ export async function resolvePackages(
 
     packages.push({
       name,
-      version: pkg.version as string,
+      version,
       dir,
       packageJson: pkg,
       config,

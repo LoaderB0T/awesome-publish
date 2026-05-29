@@ -45,6 +45,10 @@ export class GitService {
     await this.exec('git', ['tag', tag]);
   }
 
+  async pushTags(): Promise<void> {
+    await this.exec('git', ['push', '--tags']);
+  }
+
   async getStagedFiles(): Promise<string[]> {
     const { stdout } = await this.exec('git', ['diff', '--cached', '--name-only']);
     return stdout.trim().split('\n').filter(Boolean);

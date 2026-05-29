@@ -3,6 +3,7 @@ import type { PipelineStep } from '../pipeline/step.js';
 import type { PublishContext, VersionContext, GithubReleaseContext } from '../pipeline/context.js';
 import { GitHubService } from '../services/github.js';
 import { GitService } from '../services/git.js';
+import { buildTagName } from './git-tag.js';
 import { debug } from '../services/debug.js';
 
 export const createGithubReleaseStep: PipelineStep<PublishContext & VersionContext & { rootDir: string }, GithubReleaseContext> = {
@@ -27,26 +28,29 @@ export const createGithubReleaseStep: PipelineStep<PublishContext & VersionConte
 
     const releaseIds = new Map<string, number>();
     const draft = ctx.config.github.releases.draft;
+    const isPrerelease = ctx.isPrerelease;
     debug('github-release', 'draft', draft);
+    debug('github-release', 'prerelease', isPrerelease);
 
     if (ctx.config.github.releases.mode === 'combined') {
       const body = buildCombinedReleaseBody(ctx);
-      const tag = `release-${new Date().toISOString().slice(0, 10)}`;
+      const now = new Date();
+      const tag = `release-${now.toISOString().slice(0, 10)}-${now.toISOString().slice(11, 19).replace(/:/g, '')}`;
       debug('github-release', `creating combined release: ${tag}`);
-      const { id } = await github.createRelease(tag, body, draft);
+      const { id } = await github.createRelease({ tag, body, draft, prerelease: isPrerelease });
       debug('github-release', `created combined release id=${id}`);
       releaseIds.set('combined', id);
     } else {
       for (const pkg of ctx.packages) {
         const bump = ctx.versionBumps.get(pkg.name);
         if (!bump) continue;
-        const tag = `${pkg.name}@${bump.to}`;
+        const tag = buildTagName(pkg.name, bump.to, ctx.packages.length, ctx.config.gitTag.prefix);
         debug('github-release', `creating release for ${pkg.name}: ${tag}`);
         const latestTag = await git.getLatestTag(pkg.name);
         const body = latestTag
           ? (await git.getCommitsSinceTag(latestTag)).map(c => `- ${c.message}`).join('\n')
           : '';
-        const { id } = await github.createRelease(tag, body, draft);
+        const { id } = await github.createRelease({ tag, body, draft, prerelease: isPrerelease });
         debug('github-release', `created release ${pkg.name} id=${id}`);
         releaseIds.set(pkg.name, id);
       }
