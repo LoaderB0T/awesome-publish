@@ -1,3 +1,9 @@
+export interface ChangesetMeta {
+  author?: string;
+  email?: string;
+  timestamp?: string;
+}
+
 export interface Changeset {
   id: string;
   summary: string;
@@ -5,4 +11,5 @@ export interface Changeset {
     name: string;
     type: 'patch' | 'minor' | 'major';
   }[];
+  meta?: ChangesetMeta;
 }

@@ -50,6 +50,24 @@ export class GitService {
     return stdout.trim().split('\n').filter(Boolean);
   }
 
+  async getUserName(): Promise<string | null> {
+    try {
+      const { stdout } = await this.exec('git', ['config', 'user.name']);
+      return stdout.trim() || null;
+    } catch {
+      return null;
+    }
+  }
+
+  async getUserEmail(): Promise<string | null> {
+    try {
+      const { stdout } = await this.exec('git', ['config', 'user.email']);
+      return stdout.trim() || null;
+    } catch {
+      return null;
+    }
+  }
+
   async getChangedFilesSince(branch: string): Promise<string[]> {
     try {
       const { stdout } = await this.exec('git', ['diff', '--name-only', `${branch}...HEAD`]);

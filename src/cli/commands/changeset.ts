@@ -17,12 +17,17 @@ function generateId(): string {
 function formatChangeset(
   releases: { name: string; type: 'patch' | 'minor' | 'major' }[],
   summary: string,
+  meta: { author?: string | null; email?: string | null; timestamp: string },
 ): string {
   const lines = ['---'];
   for (const r of releases) {
     lines.push(`"${r.name}": ${r.type}`);
   }
   lines.push('---');
+  lines.push('');
+  if (meta.author) lines.push(`<!-- author: ${meta.author} -->`);
+  if (meta.email) lines.push(`<!-- email: ${meta.email} -->`);
+  lines.push(`<!-- timestamp: ${meta.timestamp} -->`);
   lines.push('');
   lines.push(summary);
   lines.push('');
@@ -49,6 +54,7 @@ export const changesetCommand = defineCommand({
     const packages = await resolvePackages(rootDir, config);
     debug('changeset', 'packages', packages.map(p => p.name));
 
+    const git = new GitService(rootDir);
     let changedPackages;
 
     if (args['ignore-git']) {
@@ -56,7 +62,6 @@ export const changesetCommand = defineCommand({
       changedPackages = packages;
     } else {
       // Find changed files since base branch
-      const git = new GitService(rootDir);
       const changedFiles = await git.getChangedFilesSince(args.branch);
       debug('changeset', `${changedFiles.length} files changed since ${args.branch}`);
 
@@ -121,13 +126,21 @@ export const changesetCommand = defineCommand({
       return;
     }
 
+    // Gather metadata
+    const [author, email] = await Promise.all([
+      git.getUserName(),
+      git.getUserEmail(),
+    ]);
+    const timestamp = new Date().toISOString();
+    debug('changeset', 'meta', { author, email, timestamp });
+
     // Write changeset file
     const changesetDir = join(rootDir, '.changeset');
     await mkdir(changesetDir, { recursive: true });
 
     const id = generateId();
     const filename = `${id}.md`;
-    const content = formatChangeset(releases, summary.trim());
+    const content = formatChangeset(releases, summary.trim(), { author, email, timestamp });
 
     await writeFile(join(changesetDir, filename), content);
 

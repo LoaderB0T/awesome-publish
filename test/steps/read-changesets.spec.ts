@@ -25,10 +25,17 @@ describe('readChangesetsStep', () => {
     const feature = result.changesets.find(c => c.id === 'add-feature');
     expect(feature).toBeDefined();
     expect(feature!.releases).toContainEqual({ name: '@scope/pkg-a', type: 'minor' });
+    expect(feature!.summary).toBe('Added a new feature');
+    expect(feature!.meta).toEqual({
+      author: 'Test User',
+      email: 'test@example.com',
+      timestamp: '2026-05-29T14:30:00.000Z',
+    });
 
     const bug = result.changesets.find(c => c.id === 'fix-bug');
     expect(bug).toBeDefined();
     expect(bug!.releases).toHaveLength(2);
+    expect(bug!.meta).toBeUndefined();
   });
 
   it('returns empty array when no changeset files exist', async () => {
