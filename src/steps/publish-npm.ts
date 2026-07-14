@@ -24,9 +24,11 @@ function isAuthError(msg: string): boolean {
 
 // npm's 2FA one-time-password errors. Distinct from a plain 401 (not logged in)
 // — the user IS authenticated but the OTP is missing/wrong/expired, so the hint
-// is different: send a fresh code, don't re-login.
+// is different: send a fresh code, don't re-login. NOTE: matched only against
+// npm's actual output, never the command echo (which contains the `--otp` flag
+// and would false-positive a bare /otp/ match).
 function isOtpError(msg: string): boolean {
-  return /EOTP/i.test(msg) || /one[- ]time pass(?:word)?/i.test(msg) || /otp/i.test(msg);
+  return /EOTP/i.test(msg) || /one[- ]time pass(?:word)?/i.test(msg);
 }
 
 function isVersionConflict(msg: string): boolean {
@@ -116,14 +118,31 @@ export const publishNpmStep: PipelineStep<TempDirContext & VersionContext, Publi
           status: 'published',
         });
       } catch (error: any) {
-        // Node's exec error `.message` is only "Command failed: <cmd>" — the
-        // actual npm/pnpm reason (EOTP, E402, 403, network) lives in stderr.
-        // Fold it in or the failure is undiagnosable. The adapter already
-        // redacted secrets in both message and stderr.
+        // The actual npm/pnpm reason (EOTP, E402, 403, network) lives in the
+        // subprocess output, not in Node's generic "Command failed: <cmd>"
+        // message. Classify and report on `detail` (real output only) — never
+        // the command echo, whose `--otp` flag would false-match. Adapter already
+        // redacted secrets. If detail is empty, pnpm forwarded npm's output
+        // straight to the terminal, so point the user at their scrollback.
         const stderr = error?.stderr ? String(error.stderr).trim() : '';
-        const msg = [error?.message ?? String(error), stderr].filter(Boolean).join('\n');
+        const stdout = error?.stdout ? String(error.stdout).trim() : '';
+        const rawMsg: string = error?.message ?? String(error);
+        // The reason npm/pnpm actually gave: prefer captured stderr/stdout;
+        // otherwise fall back to the error message with Node's generic
+        // "Command failed: <cmd>" echo stripped — that echo carries the `--otp`
+        // flag and must never drive classification.
+        const detail =
+          [stderr, stdout].filter(Boolean).join('\n') ||
+          rawMsg
+            .split('\n')
+            .filter(l => !l.startsWith('Command failed:'))
+            .join('\n')
+            .trim();
+        const msg =
+          detail ||
+          `${rawMsg}\n    → npm/pnpm printed no captured output; the real error is in the terminal above this summary. Re-run with --debug for more.`;
         debug('publish-npm', `${pkg.name} publish error`, msg);
-        if (isVersionConflict(msg)) {
+        if (isVersionConflict(detail)) {
           debug('publish-npm', `${pkg.name}@${version} already exists, skipping`);
           results.set(pkg.name, {
             packageName: pkg.name,
@@ -132,10 +151,11 @@ export const publishNpmStep: PipelineStep<TempDirContext & VersionContext, Publi
             status: 'skipped-already-exists',
           });
         } else {
-          // C2: Record per-package failure instead of aborting entire publish
-          const error = isAuthError(msg)
+          // C2: Record per-package failure instead of aborting entire publish.
+          // Classify on `detail` (npm's real output), not the command echo.
+          const error = isAuthError(detail)
             ? `${msg}\n    → npm authentication required. Run \`npm login\`, or set up an .npmrc with a token (in CI: NODE_AUTH_TOKEN via actions/setup-node).`
-            : isOtpError(msg)
+            : isOtpError(detail)
               ? `${msg}\n    → npm needs a valid 2FA one-time password. Re-run with a fresh code via \`--otp <code>\` (codes expire in ~30s).`
               : msg;
           results.set(pkg.name, {

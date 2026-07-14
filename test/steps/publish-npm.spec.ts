@@ -62,6 +62,25 @@ describe('publishNpmStep', () => {
     expect(err?.message).toMatch(/--otp <code>/);
   });
 
+  it('does NOT false-fire the OTP hint on the --otp flag in the command echo', async () => {
+    // The command line "pnpm publish --otp *** ..." must not be mistaken for an
+    // actual OTP error. With no captured output, point at the terminal instead.
+    publishMock.mockImplementation(async () => {
+      const err: any = new Error('Command failed: pnpm publish --otp *** --no-git-checks');
+      err.stderr = '';
+      err.stdout = '';
+      throw err;
+    });
+    let err: Error | undefined;
+    try {
+      await publishNpmStep.execute(makeCtx());
+    } catch (e) {
+      err = e as Error;
+    }
+    expect(err?.message).not.toMatch(/2FA one-time password/);
+    expect(err?.message).toMatch(/terminal above|--debug/);
+  });
+
   it('treats a version-conflict as skipped, not a failure', async () => {
     publishMock.mockImplementation(async () => {
       throw new Error('403 Forbidden: cannot publish over the previously published version');

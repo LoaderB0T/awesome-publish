@@ -66,15 +66,19 @@ function redactSecrets(msg: string): string {
 }
 
 /**
- * yarn's `yarn publish` / `yarn pack` have unreliable version-prompt and flag
- * semantics (and differ across yarn classic vs berry). We publish the
- * already-prepared temp dir with the npm CLI instead — it reads the same
- * registry auth (.npmrc) and the temp package.json already carries the correct
- * version. ponytail: yarn berry auth in .yarnrc.yml is not read by npm; document
+ * We always publish/pack the already-prepared temp dir with the `npm` CLI,
+ * regardless of the project's package manager:
+ *   - The temp dir is detached from the workspace and its package.json already
+ *     carries the resolved version and `workspace:` ranges, so pnpm/yarn buy us
+ *     nothing over npm, which reads the same registry auth (.npmrc).
+ *   - yarn's publish/pack flags differ across classic vs berry.
+ *   - pnpm has a long tail of bugs not forwarding `--otp` to the registry on
+ *     publish, so a valid 2FA code is rejected as EOTP. npm has no such issue.
+ * ponytail: yarn berry auth in .yarnrc.yml is not read by npm; document
  * NODE_AUTH_TOKEN / .npmrc for CI.
  */
-function publishBinary(pm: PackageManagerName): 'npm' | 'pnpm' {
-  return pm === 'pnpm' ? 'pnpm' : 'npm';
+function publishBinary(_pm: PackageManagerName): 'npm' {
+  return 'npm';
 }
 
 /**
@@ -104,9 +108,6 @@ export function buildPublishCmd(pm: PackageManagerName, options: PublishOptions 
   if (options.provenance) {
     parts.push('--provenance');
   }
-  // --no-git-checks is a pnpm-only flag; npm/yarn reject it. We publish from an
-  // isolated temp dir anyway, so there is nothing for pnpm to git-check.
-  if (bin === 'pnpm') parts.push('--no-git-checks');
   return parts.join(' ');
 }
 

@@ -38,15 +38,17 @@ describe('buildPublishCmd', () => {
     expect(buildPublishCmd('npm')).toBe('npm publish');
   });
 
-  it('adds --no-git-checks only for pnpm', () => {
-    expect(buildPublishCmd('pnpm')).toContain('--no-git-checks');
+  it('never adds the pnpm-only --no-git-checks flag (we publish via npm)', () => {
+    expect(buildPublishCmd('pnpm')).not.toContain('--no-git-checks');
     expect(buildPublishCmd('npm')).not.toContain('--no-git-checks');
     expect(buildPublishCmd('yarn')).not.toContain('--no-git-checks');
   });
 
-  it('delegates yarn to the npm CLI', () => {
+  it('always publishes via the npm CLI, whatever the project package manager', () => {
+    // pnpm mis-forwards --otp on publish (valid codes rejected as EOTP), and the
+    // temp dir is fully resolved, so npm is used for every package manager.
     expect(buildPublishCmd('yarn').startsWith('npm publish')).toBe(true);
-    expect(buildPublishCmd('pnpm').startsWith('pnpm publish')).toBe(true);
+    expect(buildPublishCmd('pnpm').startsWith('npm publish')).toBe(true);
     expect(buildPublishCmd('npm').startsWith('npm publish')).toBe(true);
   });
 
@@ -75,8 +77,9 @@ describe('buildPublishCmd', () => {
 });
 
 describe('buildPackCmd', () => {
-  it('uses --pack-destination and delegates yarn to npm', () => {
-    expect(buildPackCmd('pnpm', '/out')).toBe('pnpm pack --pack-destination /out');
+  it('uses --pack-destination and always packs via npm', () => {
+    expect(buildPackCmd('pnpm', '/out')).toBe('npm pack --pack-destination /out');
     expect(buildPackCmd('yarn', '/out')).toBe('npm pack --pack-destination /out');
+    expect(buildPackCmd('npm', '/out')).toBe('npm pack --pack-destination /out');
   });
 });
