@@ -46,6 +46,26 @@ function quote(s: string): string {
 }
 
 /**
+ * Reject shell metacharacters that survive double-quoting. Unlike assertSafeToken
+ * this permits spaces (paths legitimately contain them) but blocks command
+ * substitution / chaining ( ` $ ; | & < > ( ) newline ), so a value like an
+ * `--out` directory taken from CI env can't inject a command via the shell.
+ */
+function assertNoShellMeta(value: string, label: string): void {
+  if (/[`$;|&<>()\n\r]/.test(value)) {
+    throw new Error(`Unsafe ${label} value (shell metacharacters): "${value}"`);
+  }
+}
+
+/** Redact secrets that Node embeds in exec error messages (the full command line). */
+function redactSecrets(msg: string): string {
+  return msg
+    .replace(/(--otp[= ])\S+/g, '$1***')
+    .replace(/(_authToken=)\S+/g, '$1***')
+    .replace(/(:\/\/[^@\s/]+:)[^@\s/]+@/g, '$1***@');
+}
+
+/**
  * yarn's `yarn publish` / `yarn pack` have unreliable version-prompt and flag
  * semantics (and differ across yarn classic vs berry). We publish the
  * already-prepared temp dir with the npm CLI instead — it reads the same
@@ -93,6 +113,7 @@ export function buildPublishCmd(pm: PackageManagerName, options: PublishOptions 
 export function buildPackCmd(pm: PackageManagerName, outDir: string): string {
   // npm (v7+) and pnpm both support --pack-destination. yarn does not, so it
   // falls back to the npm CLI (see publishBinary rationale).
+  assertNoShellMeta(outDir, 'out');
   const bin = publishBinary(pm);
   return [bin, 'pack', '--pack-destination', quote(outDir)].join(' ');
 }
@@ -104,7 +125,15 @@ export function createAdapter(pm: PackageManagerName): PackageManagerAdapter {
   // and by never passing the (temp) directory as an argument.
   return {
     async publish(dir: string, options: PublishOptions = {}): Promise<void> {
-      await execAsync(buildPublishCmd(pm, options), { cwd: dir });
+      try {
+        await execAsync(buildPublishCmd(pm, options), { cwd: dir });
+      } catch (error: any) {
+        // Node embeds the full command line (including --otp <code>) in the
+        // error message/stderr. Redact secrets before it propagates to logs.
+        if (error?.message) error.message = redactSecrets(error.message);
+        if (error?.stderr) error.stderr = redactSecrets(String(error.stderr));
+        throw error;
+      }
     },
     async pack(dir: string, outDir: string): Promise<string> {
       const { stdout } = await execAsync(buildPackCmd(pm, outDir), { cwd: dir });

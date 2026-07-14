@@ -26,24 +26,25 @@ export default defineConfig({
 
 ### Options
 
-| Option                | Type                                        | Default                                   | Description                                                                 |
-| --------------------- | ------------------------------------------- | ----------------------------------------- | --------------------------------------------------------------------------- |
-| `publishFiles`        | `string[]` **(required)**                   | —                                         | Files/globs to include in the published package (also written to `files`).  |
-| `stripScripts`        | `boolean \| string[]` **(required)**        | —                                         | Strip all (`true`) or specific scripts from the published `package.json`.   |
-| `packageManager`      | `'npm' \| 'yarn' \| 'pnpm'`                 | auto-detected from lockfile               | Override the detected package manager.                                      |
-| `registry`            | `string`                                    | `https://registry.npmjs.org`              | Target registry.                                                            |
-| `access`              | `'public' \| 'restricted'`                  | `'public'`                                | npm access for **scoped** packages on first publish.                        |
-| `provenance`          | `boolean`                                   | `false`                                   | Publish with npm provenance (requires OIDC, e.g. GitHub Actions id-token).  |
-| `requireCleanGit`     | `boolean`                                   | `true`                                    | Refuse to publish with a dirty working tree (override with `--ignore-git`). |
-| `gitTag`              | `boolean \| { enabled; prefix? }`           | `{ enabled: true, prefix: '' }`           | Create and push git tags after a release.                                   |
-| `changelog`           | `boolean \| { enabled; file? }`             | `{ enabled: true, file: 'CHANGELOG.md' }` | Generate a changelog file.                                                  |
-| `conventionalCommits` | `boolean`                                   | `false`                                   | Auto-detect the bump type from Conventional Commit messages.                |
-| `confirmPublish`      | `boolean`                                   | `true`                                    | Prompt for confirmation before publishing (interactive mode).               |
-| `syncDependencies`    | `boolean`                                   | `false`                                   | Rewrite internal dependency ranges to the newly bumped versions.            |
-| `changesets`          | `{ enabled; enforceInPR? }`                 | `{ enabled: false }`                      | Use changeset files for version management.                                 |
-| `github.releases`     | `{ enabled; mode; draft? }`                 | `{ enabled: false }`                      | Create GitHub releases; `mode` is `'per-package'` or `'combined'`.          |
-| `aiProvider`          | `{ provider; model; baseUrl? }`             | —                                         | AI provider config (required when AI features are enabled).                 |
-| `aiReleaseNotes`      | `boolean \| { enabled; customPromptFile? }` | `false`                                   | Generate AI release notes.                                                  |
+| Option                | Type                                        | Default                                   | Description                                                                                                                                                   |
+| --------------------- | ------------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `publishFiles`        | `string[]` **(required)**                   | —                                         | Files/globs to include in the published package (also written to `files`).                                                                                    |
+| `stripScripts`        | `boolean \| string[]` **(required)**        | —                                         | Strip all (`true`) or specific scripts from the published `package.json`.                                                                                     |
+| `buildCommand`        | `string`                                    | —                                         | Command run in the repo before packing (e.g. `pnpm run build`). Needed for compiled packages, since `publishFiles` are copied as-is and scripts are stripped. |
+| `packageManager`      | `'npm' \| 'yarn' \| 'pnpm'`                 | auto-detected from lockfile               | Override the detected package manager.                                                                                                                        |
+| `registry`            | `string`                                    | `https://registry.npmjs.org`              | Target registry.                                                                                                                                              |
+| `access`              | `'public' \| 'restricted'`                  | `'public'`                                | npm access for **scoped** packages on first publish.                                                                                                          |
+| `provenance`          | `boolean`                                   | `false`                                   | Publish with npm provenance (requires OIDC, e.g. GitHub Actions id-token).                                                                                    |
+| `requireCleanGit`     | `boolean`                                   | `true`                                    | Refuse to publish with a dirty working tree (override with `--ignore-git`).                                                                                   |
+| `gitTag`              | `boolean \| { enabled; prefix? }`           | `{ enabled: true, prefix: '' }`           | Create and push git tags after a release.                                                                                                                     |
+| `changelog`           | `boolean \| { enabled; file? }`             | `{ enabled: true, file: 'CHANGELOG.md' }` | Generate a changelog file.                                                                                                                                    |
+| `conventionalCommits` | `boolean`                                   | `false`                                   | Auto-detect the bump type from Conventional Commit messages.                                                                                                  |
+| `confirmPublish`      | `boolean`                                   | `true`                                    | Prompt for confirmation before publishing (interactive mode).                                                                                                 |
+| `syncDependencies`    | `boolean`                                   | `false`                                   | Rewrite internal dependency ranges to the newly bumped versions.                                                                                              |
+| `changesets`          | `{ enabled; enforceInPR? }`                 | `{ enabled: false }`                      | Use changeset files for version management.                                                                                                                   |
+| `github.releases`     | `{ enabled; mode; draft? }`                 | `{ enabled: false }`                      | Create GitHub releases; `mode` is `'per-package'` or `'combined'`.                                                                                            |
+| `aiProvider`          | `{ provider; model; baseUrl? }`             | —                                         | AI provider config (required when AI features are enabled).                                                                                                   |
+| `aiReleaseNotes`      | `boolean \| { enabled; customPromptFile? }` | `false`                                   | Generate AI release notes.                                                                                                                                    |
 
 `workspace:` protocol ranges (pnpm) are resolved to concrete versions in the
 published `package.json` automatically.
@@ -58,16 +59,23 @@ Available on `publish`, `pack`, and `version`:
 | -------------- | ------------------------------------------------------- |
 | `--ci`         | Non-interactive mode (also auto-detected via `CI` env). |
 | `--dry-run`    | Run the pipeline but skip every side effect.            |
-| `--filter`     | Only process matching package names (glob supported).   |
+| `--filter`     | Only process matching package names (`*` wildcards).    |
 | `--ignore-git` | Skip the clean-working-tree check.                      |
-| `--registry`   | Override the configured registry.                       |
-| `--otp`        | npm 2FA one-time password (interactive mode prompts).   |
+| `--registry`   | Override the configured registry (publish only).        |
+| `--otp`        | npm 2FA one-time password (publish only).               |
 | `--debug`      | Verbose debug logging.                                  |
+
+`--debug` is accepted by every command (including `init`, `changeset`, and
+`status`). `--otp` and `--registry` only affect `publish` — they are no-ops on
+`pack`/`version`.
 
 ### `publish`
 
-Runs the full pipeline: determine version → (confirm) → write versions →
-changelog → build temp dir → publish → commit → tag → GitHub release → cleanup.
+Runs the full pipeline: determine version → (confirm) → preflight → write
+versions → changelog → (build) → build temp dir → publish → commit → tag →
+GitHub release → cleanup. Preflight validates `GITHUB_TOKEN` and the git remote
+before anything is published (when GitHub releases are enabled); `build` runs
+`buildCommand` if configured.
 
 | Flag           | Description                                            |
 | -------------- | ------------------------------------------------------ |
@@ -78,7 +86,9 @@ changelog → build temp dir → publish → commit → tag → GitHub release �
 
 ### `pack`
 
-Builds the publishable package(s) into tarballs without publishing.
+Builds the publishable package(s) into tarballs without publishing. `pack` does
+**not** modify your working tree — the tarball carries the bumped version, but
+your `package.json`/`CHANGELOG` are left untouched (unlike `version`/`publish`).
 
 | Flag     | Description                                          |
 | -------- | ---------------------------------------------------- |
@@ -97,25 +107,26 @@ Bumps versions (and changelog / tag / commit) without publishing.
 
 Create a changeset for changed packages.
 
-| Flag           | Description                                                        |
-| -------------- | ------------------------------------------------------------------ |
-| `--branch`     | Base branch to diff against (default `main`).                      |
-| `--ignore-git` | Offer all packages instead of only git-changed ones.               |
-| `--ci`         | Non-interactive: build the changeset from the flags below.         |
-| `--type`       | `patch \| minor \| major` (required with `--ci`).                  |
-| `--summary`    | Changeset summary (required with `--ci`).                          |
-| `--packages`   | Comma-separated package names (with `--ci`; default: all changed). |
+| Flag         | Description                                                        |
+| ------------ | ------------------------------------------------------------------ |
+| `--branch`   | Base branch to diff against (default `main`).                      |
+| `--all`      | Offer all packages instead of only git-changed ones.               |
+| `--ci`       | Non-interactive: build the changeset from the flags below.         |
+| `--type`     | `patch \| minor \| major` (required with `--ci`).                  |
+| `--summary`  | Changeset summary (required with `--ci`).                          |
+| `--packages` | Comma-separated package names (with `--ci`; default: all changed). |
 
 ### `init`
 
 Scaffold config and optional workflows.
 
-| Flag           | Description                                        |
-| -------------- | -------------------------------------------------- |
-| `--yes`        | Non-interactive: accept sensible defaults.         |
-| `--force`      | Overwrite existing files instead of skipping them. |
-| `--files`      | `publishFiles` for `--yes` mode (default `lib`).   |
-| `--provenance` | Enable npm provenance in the generated workflow.   |
+| Flag           | Description                                                   |
+| -------------- | ------------------------------------------------------------- |
+| `--yes`        | Non-interactive: accept sensible defaults.                    |
+| `--force`      | Overwrite existing files instead of skipping them.            |
+| `--files`      | `publishFiles` for `--yes` mode (default `lib`).              |
+| `--build`      | Build command to run before packing (e.g. `"npm run build"`). |
+| `--provenance` | Enable npm provenance in the generated workflow.              |
 
 ### `status`
 
@@ -128,11 +139,21 @@ The bump is resolved in this priority order:
 1. **Changesets** (if `changesets.enabled`) — reads `.changeset/*.md`.
 2. **`--bump`** — explicit bump type.
 3. **Conventional Commits** (if `conventionalCommits`) — inferred from commits
-   since the last tag; `feat!`/`BREAKING CHANGE:` → major, `feat` → minor,
-   everything else → patch.
+   since the last tag: `feat!`/`BREAKING CHANGE:` → major, `feat` → minor,
+   `fix` → patch. Other types (`chore`, `docs`, `style`, `test`, `ci`, `build`,
+   `refactor`, `perf`) do **not** trigger a release. On a package's first
+   release (no prior tag) the whole history is scanned.
 4. **Interactive prompt** — asks per package (non-CI only).
 
 In CI with none of the above, the run is a clean no-op (nothing to release).
+
+### Pre-1.0 (0.x) versions
+
+For automatic bumps (changesets and conventional commits) a package on `0.x` is
+treated changesets-style: a breaking change bumps the **minor** (`0.3.2` →
+`0.4.0`) and a feature bumps the **patch**, so it never silently graduates to
+`1.0.0`. Use an explicit `--bump major` when you deliberately want to release
+`1.0.0`. A computed version that would be a downgrade aborts the run.
 
 ## Monorepos
 
@@ -170,7 +191,7 @@ Enable `aiReleaseNotes` and configure `aiProvider`:
 export default defineConfig({
   publishFiles: ['lib'],
   stripScripts: true,
-  aiProvider: { provider: 'anthropic', model: 'claude-sonnet-4-20250514' },
+  aiProvider: { provider: 'anthropic', model: 'claude-sonnet-5' },
   aiReleaseNotes: true,
 });
 ```
@@ -194,7 +215,13 @@ The next prerelease number is resolved by querying the registry (e.g.
 ## CI setup
 
 `awesome-publish init` can generate `.github/workflows/publish.yml`. It sets up
-the detected package manager (including `pnpm/action-setup` for pnpm), installs
-with a frozen lockfile, and runs `awesome-publish publish --ci`. Provide
-`NPM_TOKEN` and `GITHUB_TOKEN` as repository secrets. Enable `--provenance` (and
-the generated `id-token: write` permission) for provenance attestation.
+the detected package manager (including `pnpm/action-setup` for pnpm, pinned to a
+major version — adjust it to match your pnpm), installs with a frozen lockfile,
+runs your `buildCommand` if configured, and then `awesome-publish publish --ci`.
+Provide `NPM_TOKEN` and `GITHUB_TOKEN` as repository secrets. Enable
+`--provenance` (and the generated `id-token: write` permission) for provenance
+attestation.
+
+If `github.releases` is enabled, a preflight check verifies `GITHUB_TOKEN` and
+that the git remote is parseable **before** anything is published, so a
+misconfiguration fails the run early rather than after packages are live on npm.

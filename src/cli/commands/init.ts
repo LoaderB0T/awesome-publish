@@ -43,6 +43,10 @@ export const initCommand = defineCommand({
       type: 'string' as const,
       description: 'Comma/space-separated publishFiles (with --yes). Default: lib',
     },
+    build: {
+      type: 'string' as const,
+      description: 'Build command to run before packing (e.g. "npm run build")',
+    },
     provenance: {
       type: 'boolean' as const,
       description: 'Enable npm provenance in the generated workflow',
@@ -72,6 +76,7 @@ export const initCommand = defineCommand({
 
     let publishFiles: string[];
     let stripScripts: boolean;
+    let buildCommand: string | undefined = args.build || undefined;
     let changesetsEnabled: boolean;
     let enforceInPR = false;
     let githubReleasesEnabled: boolean;
@@ -108,6 +113,17 @@ export const initCommand = defineCommand({
         text: 'Strip scripts from published package.json?',
         default: 'yes',
       }).result;
+
+      const buildInput = await AwesomeLogger.prompt('text', {
+        text: 'Build command to run before publishing? (empty for none)',
+        hints: [`${pm} run build`],
+        default: '',
+        allowOnlyHints: false,
+        caseInsensitive: false,
+        fuzzyAutoComplete: false,
+        validators: [],
+      }).result;
+      buildCommand = buildInput.trim() || undefined;
 
       changesetsEnabled = await AwesomeLogger.prompt('confirm', {
         text: 'Enable changesets for version management?',
@@ -155,9 +171,9 @@ export const initCommand = defineCommand({
         text: 'AI model name?',
         hints:
           provider === 'anthropic'
-            ? ['claude-sonnet-4-20250514', 'claude-haiku-4-20250414']
+            ? ['claude-sonnet-5', 'claude-haiku-4-5-20251001']
             : ['gpt-4o', 'gpt-4o-mini'],
-        default: provider === 'anthropic' ? 'claude-sonnet-4-20250514' : 'gpt-4o',
+        default: provider === 'anthropic' ? 'claude-sonnet-5' : 'gpt-4o',
         allowOnlyHints: false,
         caseInsensitive: false,
         fuzzyAutoComplete: true,
@@ -204,6 +220,7 @@ export const initCommand = defineCommand({
     const config: Partial<ResolvedConfig> = {
       publishFiles,
       stripScripts,
+      ...(buildCommand ? { buildCommand } : {}),
       packageManager: pm,
       changesets: { enabled: changesetsEnabled, enforceInPR },
       github: { releases: { enabled: githubReleasesEnabled, mode: releaseMode, draft: false } },
@@ -264,7 +281,7 @@ export const initCommand = defineCommand({
         idx,
         join(workflowDir, 'publish.yml'),
         '.github/workflows/publish.yml',
-        generatePublishWorkflow(pm, { registry: config.registry, provenance })
+        generatePublishWorkflow(pm, { registry: config.registry, provenance, buildCommand })
       );
       idx++;
     }

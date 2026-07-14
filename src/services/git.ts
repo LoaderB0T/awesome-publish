@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { withRetry, isTransientError } from './retry.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -12,6 +13,15 @@ export interface Commit {
 
 export class GitService {
   constructor(private readonly cwd: string) {}
+
+  public async isRepo(): Promise<boolean> {
+    try {
+      await this.exec('git', ['rev-parse', '--is-inside-work-tree']);
+      return true;
+    } catch {
+      return false;
+    }
+  }
 
   public async isWorkingTreeClean(): Promise<boolean> {
     const { stdout } = await this.exec('git', ['status', '--porcelain']);
@@ -31,16 +41,30 @@ export class GitService {
     }
   }
 
-  public async getCommitsSinceTag(tag: string): Promise<Commit[]> {
+  /**
+   * Commits since a tag, optionally scoped to a subdirectory (`git log -- dir`)
+   * so a monorepo package's changelog/release notes list only its own commits.
+   */
+  public async getCommitsSinceTag(tag: string, pathScope?: string): Promise<Commit[]> {
+    return this.logCommits(`${tag}..HEAD`, pathScope);
+  }
+
+  /**
+   * All commits reachable from HEAD (optionally path-scoped). Used for a
+   * package's first release, when no prior tag exists to diff against.
+   */
+  public async getAllCommits(pathScope?: string): Promise<Commit[]> {
+    return this.logCommits('HEAD', pathScope);
+  }
+
+  private async logCommits(range: string, pathScope?: string): Promise<Commit[]> {
     // Unit separator (0x1f) between fields, record separator (0x1e) between
     // commits, so multi-line bodies survive and we can detect the
     // `BREAKING CHANGE:` footer (not just the `!` bang in the subject).
-    const { stdout } = await this.exec('git', [
-      'log',
-      `${tag}..HEAD`,
-      '--format=%H%x1f%s%x1f%b%x1e',
-      '--no-merges',
-    ]);
+    const args = ['log', range, '--format=%H%x1f%s%x1f%b%x1e', '--no-merges'];
+    // Path scope must come after a `--` separator.
+    if (pathScope) args.push('--', pathScope);
+    const { stdout } = await this.exec('git', args);
 
     const commits: Commit[] = [];
     for (const record of stdout.split('\x1e')) {
@@ -72,6 +96,15 @@ export class GitService {
     await this.exec('git', ['commit', '-m', message]);
   }
 
+  public async getHeadSha(): Promise<string | null> {
+    try {
+      const { stdout } = await this.exec('git', ['rev-parse', 'HEAD']);
+      return stdout.trim() || null;
+    } catch {
+      return null;
+    }
+  }
+
   public async getCurrentBranch(): Promise<string | null> {
     try {
       const { stdout } = await this.exec('git', ['rev-parse', '--abbrev-ref', 'HEAD']);
@@ -88,21 +121,27 @@ export class GitService {
     // on an upstream + push.default, which is absent on a detached HEAD (the
     // default state after actions/checkout in CI) and fails there.
     const branch = await this.getCurrentBranch();
-    if (branch) {
-      await this.exec('git', ['push', 'origin', `HEAD:${branch}`]);
-    } else {
-      // Detached HEAD: fall back to a bare push so the underlying git error is
-      // surfaced to the user rather than us guessing a branch name.
-      await this.exec('git', ['push']);
-    }
+    // Retry transient network failures — a blip here aborts the run *after* the
+    // npm publish already succeeded, which is the worst place to give up.
+    await withRetry(
+      () =>
+        branch
+          ? this.exec('git', ['push', 'origin', `HEAD:${branch}`])
+          : // Detached HEAD: fall back to a bare push so the underlying git error
+            // is surfaced to the user rather than us guessing a branch name.
+            this.exec('git', ['push']),
+      { label: 'git push', shouldRetry: isTransientError }
+    );
   }
 
   public async pushTags(tags?: string[]): Promise<void> {
-    if (tags && tags.length > 0) {
-      await this.exec('git', ['push', 'origin', ...tags]);
-    } else {
-      await this.exec('git', ['push', '--tags']);
-    }
+    await withRetry(
+      () =>
+        tags && tags.length > 0
+          ? this.exec('git', ['push', 'origin', ...tags])
+          : this.exec('git', ['push', '--tags']),
+      { label: 'git push tags', shouldRetry: isTransientError }
+    );
   }
 
   public async getStagedFiles(): Promise<string[]> {
@@ -140,6 +179,8 @@ export class GitService {
   }
 
   private async exec(cmd: string, args: string[]): Promise<{ stdout: string; stderr: string }> {
-    return execFileAsync(cmd, args, { cwd: this.cwd });
+    // execFile defaults to a 1 MiB stdout buffer; `git log` over a long history
+    // (first release on an established repo) easily exceeds that. Raise it.
+    return execFileAsync(cmd, args, { cwd: this.cwd, maxBuffer: 256 * 1024 * 1024 });
   }
 }

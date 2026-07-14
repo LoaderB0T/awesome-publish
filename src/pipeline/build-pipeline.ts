@@ -2,6 +2,8 @@ import type { ResolvedConfig } from '../types/config.js';
 import type { PipelineStep } from './step.js';
 import { determineVersionStep } from '../steps/determine-version.js';
 import { confirmPublishStep } from '../steps/confirm-publish.js';
+import { preflightStep } from '../steps/preflight.js';
+import { runBuildStep } from '../steps/run-build.js';
 import { syncDependenciesStep } from '../steps/sync-dependencies.js';
 import { writeVersionsStep } from '../steps/write-versions.js';
 import { writeChangelogStep } from '../steps/write-changelog.js';
@@ -28,16 +30,26 @@ function getCoreFeaturesForCommand(
 
   if (command === 'publish') {
     steps.push(confirmPublishStep);
+    if (config.github.releases.enabled) steps.push(preflightStep);
   }
 
-  if (config.syncDependencies) {
-    steps.push(syncDependenciesStep);
+  // Build publishable artifacts before packing (publish and pack both pack).
+  if ((command === 'publish' || command === 'pack') && config.buildCommand) {
+    steps.push(runBuildStep);
   }
 
-  steps.push(writeVersionsStep);
-
-  if (config.changelog.enabled) {
-    steps.push(writeChangelogStep);
+  // `pack` only builds tarballs — it must NOT mutate the real working tree.
+  // Writing the bumped version/changelog/synced deps to disk is only for
+  // publish/version; the tarball itself gets the bumped version from
+  // modify-package-json (temp copy), so pack doesn't need these.
+  if (command === 'publish' || command === 'version') {
+    if (config.syncDependencies) {
+      steps.push(syncDependenciesStep);
+    }
+    steps.push(writeVersionsStep);
+    if (config.changelog.enabled) {
+      steps.push(writeChangelogStep);
+    }
   }
 
   switch (command) {
@@ -70,10 +82,13 @@ export function buildPipeline(command: Command, config: ResolvedConfig): Pipelin
   }
 
   if (command === 'publish') {
-    if (config.aiReleaseNotes.enabled) steps.push(generateAiNotesStep);
     if (config.github.releases.enabled) steps.push(createGithubReleaseStep);
-    if (config.aiReleaseNotes.enabled && config.github.releases.enabled)
-      steps.push(aiNotesPublishStep);
+    // AI release notes are only consumed by the GitHub release step, so only
+    // generate them when releases are enabled — otherwise it's a wasted (paid)
+    // API call with no consumer.
+    if (config.aiReleaseNotes.enabled && config.github.releases.enabled) {
+      steps.push(generateAiNotesStep, aiNotesPublishStep);
+    }
   }
 
   return steps;

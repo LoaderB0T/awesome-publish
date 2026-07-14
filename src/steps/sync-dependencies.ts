@@ -53,9 +53,23 @@ export const syncDependenciesStep: PipelineStep<VersionContext> = {
             continue;
           }
 
-          // Preserve range prefix (^, ~, >=, etc.)
-          const prefixMatch = currentRange.match(/^([~^>=<]*)/);
-          const prefix = prefixMatch?.[1] ?? '^';
+          // Only rewrite a simple single-version range (e.g. ^1.2.3, ~1.2.3,
+          // 1.2.3, >=1.2.3). Compound ranges (">=1 <2"), hyphen ranges and
+          // x-ranges have no single replacement point — reassembling prefix +
+          // newVersion would silently drop the rest (e.g. the upper bound), so
+          // leave them untouched and warn.
+          const simpleMatch = currentRange.match(/^([~^>=<]*)\d+\.\d+\.\d+[\w.+-]*$/);
+          if (!simpleMatch) {
+            console.warn(
+              `⚠ ${pkg.name}: leaving complex range ${field}.${depName}="${currentRange}" untouched (not a simple version range)`
+            );
+            debug(
+              'sync-dependencies',
+              `${pkg.name}: skipping complex range ${depName}@${currentRange}`
+            );
+            continue;
+          }
+          const prefix = simpleMatch[1] || '^';
           const updatedRange = `${prefix}${newVersion}`;
 
           if (deps[depName] !== updatedRange) {

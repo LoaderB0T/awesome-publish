@@ -38,6 +38,19 @@ export const gitCommitStep: PipelineStep<VersionContext & { rootDir: string }> =
     );
     await git.commitAll(message);
     debug('git-commit', 'pushing release commit');
-    await git.pushCurrentBranch();
+    try {
+      await git.pushCurrentBranch();
+    } catch (error: any) {
+      // The commit (incl. any consumed-changeset deletions) is already made
+      // locally; a push failure here leaves a clean tree, so a naive re-run
+      // would be a silent no-op while npm may already be published. Tell the
+      // user exactly how to finish the release by hand.
+      throw new Error(
+        `Release commit created locally but the push failed: ${error?.message ?? error}\n` +
+          `  npm packages may already be published. Finish the release manually:\n` +
+          `    git push && git push --tags\n` +
+          `  then create the GitHub release(s) if enabled.`
+      );
+    }
   },
 };

@@ -17,6 +17,12 @@ export interface ChangesetContext {
 export interface VersionContext {
   versionBumps: Map<string, VersionBump>;
   isPrerelease: boolean;
+  /**
+   * Latest existing tag per package, captured before git-tag creates the new
+   * release tag. Downstream steps diff commits since this to build changelogs
+   * and release notes. `null` means the package has no prior tag.
+   */
+  previousTags: Map<string, string | null>;
 }
 
 export interface TempDirContext {

@@ -1,15 +1,13 @@
 import type { Commit } from './git.js';
 
+// Standard Conventional Commits release semantics: only fix (patch) and feat
+// (minor) trigger a release; a breaking change (see determineBumpFromCommits)
+// forces a major. Non-release types (chore, docs, style, test, ci, build,
+// refactor, perf) are intentionally absent so an ordinary maintenance-only
+// cycle does not force an unwanted patch publish. Add `perf: 'patch'` here if
+// you want perf commits to release.
 const BUMP_TYPE_MAP: Record<string, 'patch' | 'minor' | 'major'> = {
   fix: 'patch',
-  perf: 'patch',
-  docs: 'patch',
-  chore: 'patch',
-  refactor: 'patch',
-  style: 'patch',
-  test: 'patch',
-  ci: 'patch',
-  build: 'patch',
   feat: 'minor',
 };
 

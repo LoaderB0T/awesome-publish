@@ -9,12 +9,16 @@ export function generateConfigFile(config: Partial<ResolvedConfig>): string {
     `  stripScripts: ${config.stripScripts ?? true},`,
   ];
 
+  if (config.buildCommand) {
+    lines.push(`  buildCommand: ${JSON.stringify(config.buildCommand)},`);
+  }
+
   if (config.provenance) {
     lines.push(`  provenance: true,`);
   }
 
   if (config.packageManager) {
-    lines.push(`  packageManager: '${config.packageManager}',`);
+    lines.push(`  packageManager: ${JSON.stringify(config.packageManager)},`);
   }
 
   if (config.changesets?.enabled) {
@@ -37,10 +41,10 @@ export function generateConfigFile(config: Partial<ResolvedConfig>): string {
 
   if (config.aiProvider) {
     lines.push(`  aiProvider: {`);
-    lines.push(`    provider: '${config.aiProvider.provider}',`);
-    lines.push(`    model: '${config.aiProvider.model}',`);
+    lines.push(`    provider: ${JSON.stringify(config.aiProvider.provider)},`);
+    lines.push(`    model: ${JSON.stringify(config.aiProvider.model)},`);
     if (config.aiProvider.baseUrl) {
-      lines.push(`    baseUrl: '${config.aiProvider.baseUrl}',`);
+      lines.push(`    baseUrl: ${JSON.stringify(config.aiProvider.baseUrl)},`);
     }
     lines.push(`  },`);
     lines.push(`  aiReleaseNotes: true,`);

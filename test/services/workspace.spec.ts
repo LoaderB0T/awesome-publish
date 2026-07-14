@@ -97,6 +97,20 @@ describe('resolvePackages', () => {
     expect(result.map(p => p.name)).toEqual(['a']);
   });
 
+  it('treats a settings-only pnpm-workspace.yaml (no packages:) as a single package', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'ap-ws-settings-'));
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'solo', version: '2.1.0' }));
+    // pnpm 9+ commonly has a workspace file with only settings, no `packages:`.
+    writeFileSync(
+      join(dir, 'pnpm-workspace.yaml'),
+      'onlyBuiltDependencies:\n  - esbuild\nallowBuilds:\n  foo: true\n'
+    );
+
+    const result = await resolvePackages(dir, defaultConfig);
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe('solo');
+  });
+
   it('publishes dependencies before dependents (topological order)', async () => {
     const root = mkdtempSync(join(tmpdir(), 'ap-ws-topo-'));
     writeFileSync(

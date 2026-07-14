@@ -3,8 +3,7 @@ import { writeFile, mkdir } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { AwesomeLogger } from 'awesome-logging';
-import { loadConfigFromDir } from '../../config/load-config.js';
-import { validateConfig } from '../../config/schema.js';
+import { resolveConfigForCommand } from '../../config/load-config.js';
 import { detectPackageManager } from '../../services/package-manager.js';
 import { resolvePackages } from '../../services/workspace.js';
 import { GitService } from '../../services/git.js';
@@ -44,9 +43,9 @@ export const changesetCommand = defineCommand({
       description: 'Base branch to compare against',
       default: 'main',
     },
-    'ignore-git': {
+    all: {
       type: 'boolean' as const,
-      description: 'Show all packages instead of only git-changed ones',
+      description: 'Offer all packages instead of only git-changed ones',
     },
     ci: {
       type: 'boolean' as const,
@@ -68,10 +67,7 @@ export const changesetCommand = defineCommand({
 
     const rootDir = process.cwd();
     const pm = detectPackageManager(rootDir);
-    const rawConfig = await loadConfigFromDir(rootDir);
-    const config = rawConfig
-      ? validateConfig(rawConfig, pm)
-      : validateConfig({ publishFiles: ['lib'], stripScripts: true }, pm);
+    const config = await resolveConfigForCommand(rootDir, pm);
 
     const packages = await resolvePackages(rootDir, config);
     debug(
@@ -83,11 +79,16 @@ export const changesetCommand = defineCommand({
     const git = new GitService(rootDir);
     let changedPackages;
 
-    if (args['ignore-git'] || (nonInteractive && args.packages)) {
-      // Explicit package list (or --ignore-git) bypasses git change detection.
+    if (args.all || (nonInteractive && args.packages)) {
+      // Explicit package list (or --all) bypasses git change detection.
       debug('changeset', 'skipping git change detection');
       changedPackages = packages;
     } else {
+      if (!(await git.isRepo())) {
+        throw new Error(
+          `Not a git repository (${rootDir}). Run \`git init\`, or use --all to select packages without git change detection.`
+        );
+      }
       // Find changed files since base branch
       const changedFiles = await git.getChangedFilesSince(args.branch);
       debug('changeset', `${changedFiles.length} files changed since ${args.branch}`);
@@ -97,12 +98,34 @@ export const changesetCommand = defineCommand({
         return;
       }
 
-      // Map changed files to packages
-      changedPackages = packages.filter(pkg => {
-        const pkgRelDir = relative(rootDir, pkg.dir).replace(/\\/g, '/');
-        if (pkgRelDir === '' || pkgRelDir === '.') return changedFiles.length > 0;
-        return changedFiles.some(f => f.replace(/\\/g, '/').startsWith(`${pkgRelDir}/`));
-      });
+      const normalizedFiles = changedFiles.map(f => f.replace(/\\/g, '/'));
+      const pkgDirs = packages.map(p => ({
+        pkg: p,
+        rel: relative(rootDir, p.dir).replace(/\\/g, '/'),
+      }));
+      const rootPkg = pkgDirs.find(d => d.rel === '' || d.rel === '.');
+
+      // Attribute each changed file to the single package that owns it — the
+      // LONGEST matching package dir — so a file in a nested package
+      // (packages/a/nested) isn't counted for its parent (packages/a) too.
+      // Files under no sub-package belong to the root package (if publishable).
+      const owners = new Set<string>();
+      for (const f of normalizedFiles) {
+        let best: (typeof pkgDirs)[number] | undefined;
+        for (const d of pkgDirs) {
+          if (d.rel === '' || d.rel === '.') continue;
+          if (
+            (f === d.rel || f.startsWith(`${d.rel}/`)) &&
+            (!best || d.rel.length > best.rel.length)
+          ) {
+            best = d;
+          }
+        }
+        if (best) owners.add(best.pkg.name);
+        else if (rootPkg) owners.add(rootPkg.pkg.name);
+      }
+
+      changedPackages = packages.filter(p => owners.has(p.name));
 
       debug(
         'changeset',

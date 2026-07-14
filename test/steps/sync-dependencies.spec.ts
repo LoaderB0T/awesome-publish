@@ -134,4 +134,40 @@ describe('syncDependenciesStep', () => {
     const updated = JSON.parse(readFileSync(join(dirB, 'package.json'), 'utf-8'));
     expect(updated.dependencies['pkg-a']).toBe('~1.1.0');
   });
+
+  it('leaves compound ranges untouched instead of corrupting them', async () => {
+    const dirA = mkdtempSync(join(tmpdir(), 'ap-sync-a-'));
+    const dirB = mkdtempSync(join(tmpdir(), 'ap-sync-b-'));
+
+    writeFileSync(join(dirA, 'package.json'), JSON.stringify({ name: 'pkg-a', version: '1.0.0' }));
+    writeFileSync(
+      join(dirB, 'package.json'),
+      JSON.stringify({
+        name: 'pkg-b',
+        version: '2.0.0',
+        dependencies: { 'pkg-a': '>=1.0.0 <2.0.0' },
+      })
+    );
+
+    const config = makeConfig();
+    const ctx = {
+      config,
+      packages: [
+        { name: 'pkg-a', version: '1.0.0', dir: dirA, packageJson: {}, config },
+        { name: 'pkg-b', version: '2.0.0', dir: dirB, packageJson: {}, config },
+      ],
+      mode: 'interactive' as const,
+      dryRun: false,
+      debug: false,
+      versionBumps: new Map([
+        ['pkg-a', { packageName: 'pkg-a', from: '1.0.0', to: '1.1.0', type: 'minor' as const }],
+      ]),
+    };
+
+    await syncDependenciesStep.execute(ctx as any);
+
+    const updated = JSON.parse(readFileSync(join(dirB, 'package.json'), 'utf-8'));
+    // Must NOT become ">=<1.1.0" (dropping the upper bound).
+    expect(updated.dependencies['pkg-a']).toBe('>=1.0.0 <2.0.0');
+  });
 });

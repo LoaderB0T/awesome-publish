@@ -3,18 +3,51 @@ import { withRetry, isTransientError } from './retry.js';
 
 const BUMP_ORDER = { patch: 0, minor: 1, major: 2 } as const;
 
+export interface BumpOptions {
+  /**
+   * Apply changesets-style pre-1.0 semantics: while the major version is 0, a
+   * `major` bump is demoted to `minor` and a `minor` to `patch`, so an
+   * automatic (changeset / conventional-commit) release never silently
+   * graduates a 0.x package to 1.0.0. Explicit `--bump major` does NOT pass
+   * this flag, so it stays the intentional escape hatch to reach 1.0.0.
+   */
+  zeroBased?: boolean;
+}
+
 /**
  * Bump a semver version string using the canonical `semver` library. Standard
  * semver semantics apply: finalizing a prerelease keeps its target version
  * (1.0.0-beta.1 + patch → 1.0.0, not 1.0.1) and build metadata is handled
- * correctly.
+ * correctly. See {@link BumpOptions.zeroBased} for pre-1.0 handling.
  */
-export function bumpVersion(version: string, type: 'patch' | 'minor' | 'major'): string {
-  const result = semver.inc(version, type);
+export function bumpVersion(
+  version: string,
+  type: 'patch' | 'minor' | 'major',
+  options: BumpOptions = {}
+): string {
+  let effectiveType = type;
+  if (options.zeroBased && semver.major(version) === 0) {
+    if (type === 'major') effectiveType = 'minor';
+    else if (type === 'minor') effectiveType = 'patch';
+  }
+  const result = semver.inc(version, effectiveType);
   if (!result) {
     throw new Error(`Invalid version: "${version}" — expected semver format (x.y.z)`);
   }
   return result;
+}
+
+/**
+ * Guard against writing a version that is not strictly newer than the current
+ * one (a downgrade). Finalizing a prerelease to its own base (1.0.0-beta.1 →
+ * 1.0.0) is an increase and passes; a computed version lower than the current
+ * (e.g. a mismatched `--pre` identifier resolving below a published stable)
+ * throws so the release aborts before anything is written or published.
+ */
+export function assertNoDowngrade(from: string, to: string): void {
+  if (semver.valid(from) && semver.valid(to) && semver.lt(to, from)) {
+    throw new Error(`Refusing to publish a downgrade: ${from} → ${to}`);
+  }
 }
 
 /**

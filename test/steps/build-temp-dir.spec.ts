@@ -48,4 +48,68 @@ describe('buildTempDirStep', () => {
     expect(existsSync(join(tempDir, 'src'))).toBe(false);
     expect(existsSync(join(tempDir, 'package.json'))).toBe(true);
   });
+
+  it('always includes README and LICENSE even when not in publishFiles', async () => {
+    const pkgDir = createFakePackage();
+    writeFileSync(join(pkgDir, 'LICENSE'), 'MIT');
+    // publishFiles deliberately omits README/LICENSE.
+    const config = { publishFiles: ['lib'] } as ResolvedConfig;
+
+    const ctx = {
+      config,
+      packages: [{ name: 'test', version: '1.0.0', dir: pkgDir, packageJson: {}, config }],
+      mode: 'interactive' as const,
+      dryRun: false,
+    };
+
+    const result = await buildTempDirStep.execute(ctx as any);
+    const tempDir = result.tempDirs.get('test')!;
+    createdDirs.push(tempDir);
+
+    expect(existsSync(join(tempDir, 'README.md'))).toBe(true);
+    expect(existsSync(join(tempDir, 'LICENSE'))).toBe(true);
+  });
+
+  it('does not crash when a directory matches the README/LICENSE glob', async () => {
+    const pkgDir = createFakePackage();
+    mkdirSync(join(pkgDir, 'LICENSES')); // REUSE convention — a directory
+    writeFileSync(join(pkgDir, 'LICENSES', 'MIT.txt'), 'MIT');
+    const config = { publishFiles: ['lib'] } as ResolvedConfig;
+
+    const ctx = {
+      config,
+      packages: [{ name: 'test', version: '1.0.0', dir: pkgDir, packageJson: {}, config }],
+      mode: 'interactive' as const,
+      dryRun: false,
+    };
+
+    const result = await buildTempDirStep.execute(ctx as any);
+    const tempDir = result.tempDirs.get('test')!;
+    createdDirs.push(tempDir);
+    // README.md (a file) is still copied; the LICENSES dir is skipped, no crash.
+    expect(existsSync(join(tempDir, 'README.md'))).toBe(true);
+    expect(existsSync(join(tempDir, 'LICENSES'))).toBe(false);
+  });
+
+  it('throws instead of publishing an empty package when publishFiles match nothing', async () => {
+    const pkgDir = mkdtempSync(join(tmpdir(), 'ap-build-empty-'));
+    writeFileSync(
+      join(pkgDir, 'package.json'),
+      JSON.stringify({ name: 'empty', version: '1.0.0' })
+    );
+    // publishFiles points at a dir that doesn't exist, and there IS a bump.
+    const config = { publishFiles: ['dist'] } as ResolvedConfig;
+
+    const ctx = {
+      config,
+      packages: [{ name: 'empty', version: '1.0.0', dir: pkgDir, packageJson: {}, config }],
+      versionBumps: new Map([
+        ['empty', { packageName: 'empty', from: '1.0.0', to: '1.0.1', type: 'patch' }],
+      ]),
+      mode: 'ci' as const,
+      dryRun: false,
+    };
+
+    await expect(buildTempDirStep.execute(ctx as any)).rejects.toThrow(/empty|matched/i);
+  });
 });

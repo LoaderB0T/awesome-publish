@@ -3,6 +3,12 @@ export interface AwesomePublishConfig {
   registry?: string;
   publishFiles: string[];
   stripScripts: boolean | string[];
+  /**
+   * Command run (in the repo, before packing) to build publishable artifacts —
+   * e.g. 'npm run build'. Needed because publishFiles are copied as-is and
+   * lifecycle scripts are stripped, so a compiled package must be built first.
+   */
+  buildCommand?: string;
   /** npm access for scoped packages on first publish. Default 'public'. */
   access?: 'public' | 'restricted';
   /** Publish with npm provenance (requires OIDC, e.g. GitHub Actions id-token). Default false. */
@@ -52,6 +58,7 @@ export interface ResolvedConfig {
   registry: string;
   publishFiles: string[];
   stripScripts: boolean | string[];
+  buildCommand?: string;
   access: 'public' | 'restricted';
   provenance: boolean;
   requireCleanGit: boolean;

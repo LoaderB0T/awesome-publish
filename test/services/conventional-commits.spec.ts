@@ -82,6 +82,26 @@ describe('determineBumpFromCommits', () => {
     expect(determineBumpFromCommits(commits)).toBeNull();
   });
 
+  it('does not release on maintenance-only types (chore/docs/etc)', () => {
+    // Standard Conventional Commits: only fix/feat (and breaking) release.
+    const commits = [
+      commit('chore: bump deps'),
+      commit('docs: update readme'),
+      commit('style: reformat'),
+      commit('test: add cases'),
+      commit('ci: tweak workflow'),
+      commit('build: config'),
+      commit('refactor: internals'),
+      commit('perf: speed up'),
+    ];
+    expect(determineBumpFromCommits(commits)).toBeNull();
+  });
+
+  it('still detects a breaking change even on a non-release type', () => {
+    const commits = [commit('refactor(core)!: drop old path')];
+    expect(determineBumpFromCommits(commits)).toBe('major');
+  });
+
   it('returns null for empty commits', () => {
     expect(determineBumpFromCommits([])).toBeNull();
   });

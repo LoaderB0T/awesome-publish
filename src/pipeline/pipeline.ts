@@ -39,6 +39,8 @@ const STEP_LABELS: Record<string, string> = {
   'consume-changesets': 'Consume changesets',
   'determine-version': 'Determine version',
   'confirm-publish': 'Confirm publish',
+  preflight: 'Preflight checks',
+  'run-build': 'Build packages',
   'sync-dependencies': 'Sync dependencies',
   'write-versions': 'Write versions',
   'write-changelog': 'Write changelog',

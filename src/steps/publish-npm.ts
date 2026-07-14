@@ -10,9 +10,23 @@ import { debug } from '../services/debug.js';
 // A publish failure that means "this version is already on the registry" —
 // safe to treat as skip. Distinct from other 403s (permission denied, OTP
 // required, org membership) which are real failures.
+// npm's "not logged in" errors — surfaced with an actionable hint since a
+// first-time local publisher hits this before anything else.
+function isAuthError(msg: string): boolean {
+  return (
+    /ENEEDAUTH/i.test(msg) ||
+    /need(?:s)? auth/i.test(msg) ||
+    /must be logged in/i.test(msg) ||
+    // "401", npm's "E401" code, but not "1401".
+    /(?<![0-9])E?401\b/.test(msg)
+  );
+}
+
 function isVersionConflict(msg: string): boolean {
   return (
-    msg.includes('409') ||
+    // "409" or npm's "E409" code, but not an unrelated "1409"/port so a real
+    // failure isn't misclassified as an already-exists skip.
+    /(?<![0-9])E?409\b/.test(msg) ||
     /EPUBLISHCONFLICT/i.test(msg) ||
     /cannot publish over/i.test(msg) ||
     /previously published/i.test(msg) ||
@@ -107,27 +121,34 @@ export const publishNpmStep: PipelineStep<TempDirContext & VersionContext, Publi
           });
         } else {
           // C2: Record per-package failure instead of aborting entire publish
+          const error = isAuthError(msg)
+            ? `${msg}\n    → npm authentication required. Run \`npm login\`, or set up an .npmrc with a token (in CI: NODE_AUTH_TOKEN via actions/setup-node).`
+            : msg;
           results.set(pkg.name, {
             packageName: pkg.name,
             version,
             registry,
             status: 'failed',
-            error: msg,
+            error,
           });
         }
       }
     }
 
     // Fail fast if any package failed to publish. Throwing here stops the
-    // pipeline before git-tag / github-release run and before cleanup removes
-    // the temp dirs, so tags/releases are never created for an unpublished
-    // package and the temp dirs are preserved for inspection/retry.
+    // pipeline before git-tag / github-release run, so tags/releases are never
+    // created for an unpublished package. In a monorepo some packages may have
+    // already published before the failure — surface exactly which, since those
+    // are live on npm and the git/GitHub steps did NOT run, so they need manual
+    // tagging/recovery.
     const failed = [...results.values()].filter(r => r.status === 'failed');
     if (failed.length > 0) {
       const summary = failed.map(f => `  ${f.packageName}@${f.version}: ${f.error}`).join('\n');
       const published = [...results.values()].filter(r => r.status === 'published');
       const publishedSummary = published.length
-        ? `\nAlready published this run: ${published.map(p => `${p.packageName}@${p.version}`).join(', ')}`
+        ? `\n\n⚠ Already published to npm this run (NOT tagged/committed — recover manually): ${published
+            .map(p => `${p.packageName}@${p.version}`)
+            .join(', ')}`
         : '';
       throw new Error(
         `Failed to publish ${failed.length} package(s):\n${summary}${publishedSummary}`

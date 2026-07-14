@@ -1,44 +1,16 @@
 import { defineCommand } from 'citty';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { join, basename } from 'node:path';
-import { loadConfigFromDir } from '../../config/load-config.js';
-import { validateConfig } from '../../config/schema.js';
+import { existsSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { resolveConfigForCommand } from '../../config/load-config.js';
 import { detectPackageManager } from '../../services/package-manager.js';
 import { resolvePackages } from '../../services/workspace.js';
 import { GitService } from '../../services/git.js';
 import { determineBumpFromCommits } from '../../services/conventional-commits.js';
 import { bumpVersion, highestBump } from '../../services/version.js';
 import { tagMatchPrefix } from '../../steps/git-tag.js';
+import { parseChangesetFile } from '../../steps/read-changesets.js';
 import { setDebug, debug } from '../../services/debug.js';
 import type { Changeset } from '../../types/changeset.js';
-
-function parseChangesetFile(filePath: string): Changeset | null {
-  // Normalize CRLF so the frontmatter regex matches on Windows-authored files.
-  const content = readFileSync(filePath, 'utf-8').replace(/\r\n/g, '\n');
-  const match = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
-  if (!match) return null;
-
-  const [, frontmatter, body] = match;
-  const releases: Changeset['releases'] = [];
-
-  for (const line of frontmatter.split('\n')) {
-    const lineMatch = line.match(/^"(.+)":\s*(patch|minor|major)\s*$/);
-    if (lineMatch) {
-      releases.push({ name: lineMatch[1], type: lineMatch[2] as 'patch' | 'minor' | 'major' });
-    }
-  }
-
-  if (releases.length === 0) return null;
-
-  // Strip metadata comments from summary
-  const summary = body
-    .split('\n')
-    .filter(l => !l.match(/^<!--\s*(author|email|timestamp):\s*.+\s*-->$/))
-    .join('\n')
-    .trim();
-
-  return { id: basename(filePath, '.md'), summary, releases };
-}
 
 export const statusCommand = defineCommand({
   meta: { name: 'status', description: 'Show pending changesets and what would be published' },
@@ -50,10 +22,7 @@ export const statusCommand = defineCommand({
 
     const rootDir = process.cwd();
     const pm = detectPackageManager(rootDir);
-    const rawConfig = await loadConfigFromDir(rootDir);
-    const config = rawConfig
-      ? validateConfig(rawConfig, pm)
-      : validateConfig({ publishFiles: ['lib'], stripScripts: true }, pm);
+    const config = await resolveConfigForCommand(rootDir, pm);
 
     const packages = await resolvePackages(rootDir, config);
     debug(
@@ -77,23 +46,53 @@ export const statusCommand = defineCommand({
 
     console.log('');
 
+    // Effective bump per package, using the SAME precedence as publish:
+    // changesets first, then conventional commits. (status has no --bump/--pre.)
+    const changesetBumpTypes = new Map<string, 'patch' | 'minor' | 'major'>();
+    for (const cs of changesets) {
+      for (const r of cs.releases) {
+        const existing = changesetBumpTypes.get(r.name);
+        changesetBumpTypes.set(r.name, existing ? highestBump(existing, r.type) : r.type);
+      }
+    }
+    const effectiveBumps = new Map<
+      string,
+      { from: string; to: string; type: 'patch' | 'minor' | 'major'; source: string }
+    >();
+
     // Show packages
     console.log(`📦 Packages (${packages.length}):`);
     for (const pkg of packages) {
       const latestTag = await git.getLatestTag(
         tagMatchPrefix(pkg.name, packages.length, config.gitTag.prefix)
       );
-      const commits = latestTag ? await git.getCommitsSinceTag(latestTag) : [];
+      const commits = latestTag
+        ? await git.getCommitsSinceTag(latestTag)
+        : await git.getAllCommits();
       const commitCount = commits.length;
 
-      let bumpHint = '';
-      if (config.conventionalCommits && commitCount > 0) {
+      let type: 'patch' | 'minor' | 'major' | undefined;
+      let source = '';
+      if (config.changesets.enabled && changesetBumpTypes.has(pkg.name)) {
+        type = changesetBumpTypes.get(pkg.name);
+        source = 'changeset';
+      } else if (config.conventionalCommits) {
         const detected = determineBumpFromCommits(commits);
-        if (detected) bumpHint = ` (conventional: ${detected})`;
+        if (detected) {
+          type = detected;
+          source = 'conventional';
+        }
+      }
+
+      let hint = '';
+      if (type) {
+        const to = bumpVersion(pkg.version, type, { zeroBased: true });
+        effectiveBumps.set(pkg.name, { from: pkg.version, to, type, source });
+        hint = ` → ${to} (${type}, ${source})`;
       }
 
       console.log(
-        `  ${pkg.name}@${pkg.version}  ${commitCount} commits since ${latestTag ?? 'beginning'}${bumpHint}`
+        `  ${pkg.name}@${pkg.version}  ${commitCount} commits since ${latestTag ?? 'beginning'}${hint}`
       );
     }
 
@@ -109,24 +108,16 @@ export const statusCommand = defineCommand({
           console.log(`  ${cs.id}: ${pkgs}`);
           console.log(`    "${cs.summary}"`);
         }
+      }
+    }
 
-        // Show what versions would be bumped
-        console.log('');
-        console.log('📊 Pending version bumps:');
-        const bumpTypes = new Map<string, 'patch' | 'minor' | 'major'>();
-        for (const cs of changesets) {
-          for (const r of cs.releases) {
-            const existing = bumpTypes.get(r.name);
-            bumpTypes.set(r.name, existing ? highestBump(existing, r.type) : r.type);
-          }
-        }
-        for (const pkg of packages) {
-          const type = bumpTypes.get(pkg.name);
-          if (type) {
-            const newVersion = bumpVersion(pkg.version, type);
-            console.log(`  ${pkg.name}: ${pkg.version} → ${newVersion} (${type})`);
-          }
-        }
+    // Unified version-bump preview (changesets and/or conventional commits).
+    if (effectiveBumps.size > 0) {
+      console.log('');
+      console.log('📊 Pending version bumps:');
+      for (const pkg of packages) {
+        const b = effectiveBumps.get(pkg.name);
+        if (b) console.log(`  ${pkg.name}: ${b.from} → ${b.to} (${b.type}, ${b.source})`);
       }
     }
 

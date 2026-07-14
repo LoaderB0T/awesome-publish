@@ -1,11 +1,10 @@
 import { readFileSync, existsSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { resolve, relative } from 'node:path';
 import { Phases } from '../pipeline/phases.js';
 import type { PipelineStep } from '../pipeline/step.js';
 import type { VersionContext, AiNotesContext } from '../pipeline/context.js';
 import { createAiProvider } from '../services/ai/factory.js';
 import { GitService } from '../services/git.js';
-import { tagMatchPrefix } from './git-tag.js';
 import { debug } from '../services/debug.js';
 
 function interpolatePrompt(
@@ -25,18 +24,25 @@ export const generateAiNotesStep: PipelineStep<
 > = {
   name: 'ai-notes-generate',
   phase: Phases.AI_NOTES_GENERATE,
-  after: [Phases.DETERMINE_VERSION],
-  before: [Phases.PUBLISH_NPM],
+  // Run AFTER publish (but before the release commit, so the commit list still
+  // excludes the "chore: release" commit). A slow or hung AI endpoint then only
+  // delays the git/GitHub steps — npm is already published — instead of stalling
+  // the release before anything ships.
+  after: [Phases.PUBLISH_NPM],
+  before: [Phases.GIT_COMMIT],
   hasSideEffects: false,
 
-  shouldRun: ctx => ctx.config.aiReleaseNotes.enabled && ctx.versionBumps?.size > 0,
+  // Skip in dry-run: it's a real (paid, slow) provider call with no side effect
+  // worth previewing.
+  shouldRun: ctx =>
+    ctx.config.aiReleaseNotes.enabled && ctx.versionBumps?.size > 0 && !(ctx as any).dryRun,
 
   async execute(ctx): Promise<AiNotesContext> {
     const releaseNotes = new Map<string, string>();
 
     // AI release notes are a cosmetic enhancement — never let an AI/provider
-    // failure abort the release (this step runs before publish-npm). If the
-    // provider can't be created (e.g. missing API key), warn and skip.
+    // failure abort the release. If the provider can't be created (e.g. missing
+    // API key), warn and skip.
     let provider;
     try {
       provider = createAiProvider(ctx.config);
@@ -61,12 +67,15 @@ export const generateAiNotesStep: PipelineStep<
       const bump = ctx.versionBumps.get(pkg.name);
       if (!bump) continue;
 
-      const latestTag = await git.getLatestTag(
-        tagMatchPrefix(pkg.name, ctx.packages.length, ctx.config.gitTag.prefix)
-      );
+      const latestTag = ctx.previousTags?.get(pkg.name) ?? null;
       debug('ai-notes-generate', `${pkg.name}: latest tag`, latestTag ?? 'none');
 
-      const commits = latestTag ? await git.getCommitsSinceTag(latestTag) : [];
+      // Monorepo → scope commits to the package dir. First release (no prior
+      // tag) → summarize the whole history.
+      const scope = ctx.packages.length > 1 ? relative(ctx.rootDir, pkg.dir) : undefined;
+      const commits = latestTag
+        ? await git.getCommitsSinceTag(latestTag, scope)
+        : await git.getAllCommits(scope);
       debug('ai-notes-generate', `${pkg.name}: ${commits.length} commits since tag`);
 
       const commitList = commits.map(c => `- ${c.message}`).join('\n');

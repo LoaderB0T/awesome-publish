@@ -1,7 +1,6 @@
 import { defineCommand } from 'citty';
 import { sharedArgs } from '../shared-args.js';
-import { loadConfigFromDir } from '../../config/load-config.js';
-import { validateConfig } from '../../config/schema.js';
+import { resolveConfigForCommand } from '../../config/load-config.js';
 import { detectPackageManager } from '../../services/package-manager.js';
 import { resolvePackages } from '../../services/workspace.js';
 import { buildPipeline } from '../../pipeline/build-pipeline.js';
@@ -27,10 +26,7 @@ export const versionCommand = defineCommand({
     const pm = detectPackageManager(rootDir);
     debug('version', 'package manager', pm);
 
-    const rawConfig = await loadConfigFromDir(rootDir);
-    const config = rawConfig
-      ? validateConfig(rawConfig, pm)
-      : validateConfig({ publishFiles: ['lib'], stripScripts: true }, pm);
+    const config = await resolveConfigForCommand(rootDir, pm);
     debug('version', 'resolved config', config);
 
     await assertGitClean(rootDir, config, args['ignore-git']);
@@ -41,6 +37,10 @@ export const versionCommand = defineCommand({
       'resolved packages',
       packages.map(p => `${p.name}@${p.version}`)
     );
+
+    if (packages.length === 0) {
+      throw new Error('No packages found to version');
+    }
 
     const steps = buildPipeline('version', config);
     debug(

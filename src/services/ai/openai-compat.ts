@@ -14,7 +14,8 @@ export class OpenAiCompatProvider implements AiProvider {
   async generateText(prompt: string): Promise<string> {
     return withRetry(
       async () => {
-        const response = await fetch(`${this.baseUrl}/chat/completions`, {
+        const endpoint = `${this.baseUrl.replace(/\/$/, '')}/chat/completions`;
+        const response = await fetch(endpoint, {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${this.apiKey}`,
@@ -30,7 +31,9 @@ export class OpenAiCompatProvider implements AiProvider {
         });
 
         if (!response.ok) {
-          const text = await response.text();
+          // Truncate the body — a misconfigured proxy could reflect request
+          // headers (including the Authorization key) in its error page.
+          const text = (await response.text()).slice(0, 200);
           throw new Error(`AI API error ${response.status}: ${text}`);
         }
 

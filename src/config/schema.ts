@@ -39,6 +39,7 @@ export function normalizeConfig(
     registry: raw.registry ?? DEFAULT_CONFIG.registry,
     publishFiles: raw.publishFiles,
     stripScripts: raw.stripScripts,
+    buildCommand: raw.buildCommand,
     access: raw.access ?? DEFAULT_CONFIG.access,
     provenance: raw.provenance ?? DEFAULT_CONFIG.provenance,
     requireCleanGit: raw.requireCleanGit ?? DEFAULT_CONFIG.requireCleanGit,
@@ -54,7 +55,9 @@ export function normalizeConfig(
       ? {
           releases: {
             enabled: raw.github.releases.enabled,
-            mode: raw.github.releases.mode,
+            // Default the mode so releases enabled without an explicit mode
+            // don't fall through to an undefined that silently reads as per-package.
+            mode: raw.github.releases.mode ?? 'per-package',
             draft: raw.github.releases.draft ?? false,
           },
         }
@@ -70,6 +73,20 @@ export function validateConfig(
 ): ResolvedConfig {
   if (!raw.publishFiles || raw.publishFiles.length === 0) {
     throw new Error('Config error: publishFiles must be a non-empty array');
+  }
+  if (!Array.isArray(raw.publishFiles) || raw.publishFiles.some(f => typeof f !== 'string')) {
+    throw new Error('Config error: publishFiles must be an array of strings');
+  }
+
+  if (
+    typeof raw.stripScripts !== 'boolean' &&
+    !(Array.isArray(raw.stripScripts) && raw.stripScripts.every(s => typeof s === 'string'))
+  ) {
+    throw new Error('Config error: stripScripts must be a boolean or an array of strings');
+  }
+
+  if (raw.buildCommand !== undefined && typeof raw.buildCommand !== 'string') {
+    throw new Error('Config error: buildCommand must be a string');
   }
 
   if (

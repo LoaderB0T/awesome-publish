@@ -46,4 +46,9 @@ describe('topologicalSort', () => {
     const names = sorted.map(s => s.name);
     expect(names).toEqual(['x', 'y', 'z']);
   });
+
+  it('throws a clear error on a duplicate phase (not a bogus cycle)', () => {
+    const steps = [fakeStep('a'), fakeStep('a')];
+    expect(() => topologicalSort(steps)).toThrow(/duplicate/i);
+  });
 });

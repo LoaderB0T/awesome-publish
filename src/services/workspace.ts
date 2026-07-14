@@ -76,7 +76,15 @@ function topoSortPackages(packages: PackageInfo[]): PackageInfo[] {
     }
   }
 
-  return sorted.length === packages.length ? sorted : packages;
+  if (sorted.length !== packages.length) {
+    const stuck = packages.filter(p => !sorted.includes(p)).map(p => p.name);
+    console.warn(
+      `⚠ Dependency cycle among workspace packages (${stuck.join(', ')}); ` +
+        `falling back to unsorted publish order — a dependent may publish before its dependency.`
+    );
+    return packages;
+  }
+  return sorted;
 }
 
 function matchesFilter(name: string, filter: string): boolean {
@@ -102,7 +110,11 @@ export async function resolvePackages(
   } else if (existsSync(join(rootDir, 'pnpm-workspace.yaml'))) {
     const yamlContent = readFileSync(join(rootDir, 'pnpm-workspace.yaml'), 'utf-8');
     const patterns = parseWorkspaceYaml(yamlContent);
-    packageDirs = resolveGlobPatterns(rootDir, patterns);
+    // A pnpm-workspace.yaml with no `packages:` key (settings-only, e.g. just
+    // `onlyBuiltDependencies`/`allowBuilds`, common in pnpm 9+) is NOT a
+    // multi-package workspace — treat the root as a single publishable package
+    // instead of resolving to zero packages.
+    packageDirs = patterns.length > 0 ? resolveGlobPatterns(rootDir, patterns) : [rootDir];
   } else {
     packageDirs = [rootDir];
   }

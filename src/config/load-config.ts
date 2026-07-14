@@ -1,8 +1,20 @@
-import { existsSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { resolve, join } from 'node:path';
 import { createJiti } from 'jiti';
-import type { AwesomePublishConfig } from '../types/config.js';
+import type { AwesomePublishConfig, ResolvedConfig } from '../types/config.js';
+import { validateConfig } from './schema.js';
 import { debug } from '../services/debug.js';
+
+/** True if the dir looks like a workspace root (per-package configs are normal). */
+function isWorkspaceRoot(dir: string): boolean {
+  if (existsSync(join(dir, 'pnpm-workspace.yaml'))) return true;
+  try {
+    const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf-8'));
+    return pkg.workspaces != null;
+  } catch {
+    return false;
+  }
+}
 
 const CONFIG_NAMES = [
   'awesome-publish.config.ts',
@@ -32,4 +44,29 @@ export async function loadConfigFromDir(dir: string): Promise<AwesomePublishConf
   }
   debug('config', 'no config found in', dir);
   return undefined;
+}
+
+/**
+ * Load + validate the config for a command, warning loudly when none is found
+ * (rather than silently publishing with defaults from the wrong directory). A
+ * missing config is still allowed — zero-config `publishFiles: ['lib']` is a
+ * supported quick start — but the user is told.
+ */
+export async function resolveConfigForCommand(
+  dir: string,
+  packageManager: 'npm' | 'yarn' | 'pnpm'
+): Promise<ResolvedConfig> {
+  const raw = await loadConfigFromDir(dir);
+  if (!raw) {
+    // In a workspace root, a missing root config is normal — packages carry
+    // their own — so don't cry wolf. Warn only for a plain single-package repo.
+    if (!isWorkspaceRoot(dir)) {
+      console.warn(
+        `⚠ No awesome-publish config found in ${dir} — using defaults (publishFiles: ['lib'], stripScripts: true). ` +
+          `Run \`awesome-publish init\` to create one, or check you're in the right directory.`
+      );
+    }
+    return validateConfig({ publishFiles: ['lib'], stripScripts: true }, packageManager);
+  }
+  return validateConfig(raw, packageManager);
 }

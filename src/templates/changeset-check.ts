@@ -13,7 +13,7 @@ jobs:
           fetch-depth: 0
       - name: Check for changeset
         run: |
-          if git diff --name-only origin/main...HEAD | grep -q "^.changeset/.*\\.md$"; then
+          if git diff --name-only origin/main...HEAD | grep -q "^\\.changeset/.*\\.md$"; then
             echo "Changeset found"
           else
             echo "::error::No changeset found. Please add a changeset with: npx awesome-publish changeset"

@@ -75,12 +75,14 @@ import { defineConfig } from 'awesome-publish';
 export default defineConfig({
   publishFiles: ['lib', 'README.md'],
   stripScripts: true,
+  buildCommand: 'pnpm run build',
   changesets: { enabled: true, enforceInPR: true },
   github: { releases: { enabled: true, mode: 'per-package' } },
 });
 ```
 
-Then publish:
+Make sure you're authenticated with npm first (`npm login`, or an `.npmrc` with
+a token — in CI, `NODE_AUTH_TOKEN` via `actions/setup-node`). Then publish:
 
 ```console
 npx awesome-publish publish            # interactive
@@ -103,12 +105,12 @@ Run any command with `--help` for its flags.
 
 ## Environment variables
 
-| Variable                 | Used for                                                      |
-| ------------------------ | ------------------------------------------------------------- |
-| `NODE_AUTH_TOKEN`        | npm auth (or a project/CI `.npmrc`) when publishing           |
-| `GITHUB_TOKEN`           | Creating GitHub releases                                      |
-| `AWESOME_PUBLISH_AI_KEY` | AI release-notes provider key (when enabled)                  |
-| `NPM_TOKEN`              | Querying a private registry for prerelease version resolution |
+| Variable                 | Used for                                                                                                                                               |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `NODE_AUTH_TOKEN`        | npm auth **in CI** — only via an `.npmrc` that references it (the generated workflow's `setup-node` writes one). For local publishing use `npm login`. |
+| `GITHUB_TOKEN`           | Creating GitHub releases                                                                                                                               |
+| `AWESOME_PUBLISH_AI_KEY` | AI release-notes provider key (when enabled)                                                                                                           |
+| `NPM_TOKEN`              | Querying a private registry for prerelease version resolution                                                                                          |
 
 ## Docs 📃
 

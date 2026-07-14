@@ -1,4 +1,4 @@
-import { mkdtempSync, cpSync, existsSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, cpSync, existsSync, mkdirSync, chmodSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { globSync } from 'glob';
@@ -26,6 +26,19 @@ export const buildTempDirStep: PipelineStep<unknown, TempDirContext> = {
 
       cpSync(join(pkg.dir, 'package.json'), join(tempDir, 'package.json'));
 
+      // npm always includes README/LICENSE/CHANGELOG in a tarball — but only
+      // when they physically exist in the package dir. We publish from a
+      // detached temp dir, so copy them explicitly (matching npm's
+      // always-included set) or every package ships with no README/license.
+      for (const entry of globSync('{README,LICENSE,LICENCE,CHANGELOG,NOTICE}*', {
+        cwd: pkg.dir,
+        nocase: true,
+        nodir: true, // a dir named LICENSES/ (REUSE convention) would crash cpSync
+      })) {
+        cpSync(join(pkg.dir, entry), join(tempDir, entry));
+        debug('build-temp-dir', `${pkg.name}: included ${entry}`);
+      }
+
       // Copy .npmrc into the temp dir so registry auth is resolved when we
       // publish from os.tmpdir() (outside the repo). CI (actions/setup-node)
       // writes .npmrc to the workspace root; a package-local .npmrc wins.
@@ -34,11 +47,18 @@ export const buildTempDirStep: PipelineStep<unknown, TempDirContext> = {
         if (!srcDir) continue;
         const npmrc = join(srcDir, '.npmrc');
         if (existsSync(npmrc)) {
-          cpSync(npmrc, join(tempDir, '.npmrc'));
+          const dest = join(tempDir, '.npmrc');
+          cpSync(npmrc, dest);
+          // .npmrc may carry an auth token; it lives in a world-readable tmpdir,
+          // so restrict it to the owner. No-op on Windows (POSIX perms ignored).
+          try {
+            chmodSync(dest, 0o600);
+          } catch {}
           debug('build-temp-dir', `${pkg.name}: copied .npmrc from ${srcDir}`);
         }
       }
 
+      let totalMatched = 0;
       for (const entry of pkg.config.publishFiles) {
         // publishFiles doubles as npm's `files` field, which accepts globs.
         // Expand here so glob patterns (e.g. "dist/**/*.js") are actually
@@ -49,6 +69,7 @@ export const buildTempDirStep: PipelineStep<unknown, TempDirContext> = {
           debug('build-temp-dir', `${pkg.name}: no match for publishFile "${entry}"`);
           continue;
         }
+        totalMatched += matches.length;
         for (const match of matches) {
           const src = resolve(pkg.dir, match);
           const dest = join(tempDir, match);
@@ -56,6 +77,19 @@ export const buildTempDirStep: PipelineStep<unknown, TempDirContext> = {
           cpSync(src, dest, { recursive: true });
         }
         debug('build-temp-dir', `${pkg.name}: copied ${entry} (${matches.length} match(es))`);
+      }
+
+      // If a package we're about to publish/pack matched NO publishFiles, the
+      // tarball would contain only package.json — an empty, broken package that
+      // burns the version on npm irreversibly. Fail before publish. (Only for
+      // packages with a version bump; a no-bump monorepo sibling is skipped by
+      // publish-npm anyway.)
+      const willPublish = (ctx as any).versionBumps?.get?.(pkg.name);
+      if (totalMatched === 0 && willPublish) {
+        throw new Error(
+          `${pkg.name}: none of publishFiles [${pkg.config.publishFiles.join(', ')}] matched any files in ${pkg.dir}. ` +
+            `The package would be published empty. Check your build output and publishFiles (did the build run? correct directory?).`
+        );
       }
 
       tempDirs.set(pkg.name, tempDir);

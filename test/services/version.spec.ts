@@ -7,6 +7,7 @@ import {
   stripPrerelease,
   extractPreIdentifier,
   resolvePreVersion,
+  assertNoDowngrade,
 } from '../../src/services/version.js';
 
 describe('bumpVersion', () => {
@@ -46,6 +47,41 @@ describe('bumpVersion', () => {
     expect(bumpVersion('0.0.0', 'patch')).toBe('0.0.1');
     expect(bumpVersion('0.0.0', 'minor')).toBe('0.1.0');
     expect(bumpVersion('0.0.0', 'major')).toBe('1.0.0');
+  });
+
+  describe('zeroBased (changesets-style pre-1.0)', () => {
+    it('demotes major→minor and minor→patch while 0.x', () => {
+      expect(bumpVersion('0.3.2', 'major', { zeroBased: true })).toBe('0.4.0');
+      expect(bumpVersion('0.3.2', 'minor', { zeroBased: true })).toBe('0.3.3');
+      expect(bumpVersion('0.3.2', 'patch', { zeroBased: true })).toBe('0.3.3');
+    });
+
+    it('never auto-graduates a 0.x package to 1.0.0', () => {
+      expect(bumpVersion('0.9.9', 'major', { zeroBased: true })).not.toBe('1.0.0');
+    });
+
+    it('does not affect >=1.0.0 versions', () => {
+      expect(bumpVersion('1.2.3', 'major', { zeroBased: true })).toBe('2.0.0');
+    });
+
+    it('is off by default so explicit --bump major can graduate to 1.0.0', () => {
+      expect(bumpVersion('0.3.2', 'major')).toBe('1.0.0');
+    });
+  });
+});
+
+describe('assertNoDowngrade', () => {
+  it('allows an increase', () => {
+    expect(() => assertNoDowngrade('1.2.3', '1.2.4')).not.toThrow();
+  });
+
+  it('allows finalizing a prerelease to its base', () => {
+    expect(() => assertNoDowngrade('1.0.0-beta.1', '1.0.0')).not.toThrow();
+  });
+
+  it('throws on a strict downgrade', () => {
+    expect(() => assertNoDowngrade('1.1.0', '1.0.0')).toThrow(/downgrade/);
+    expect(() => assertNoDowngrade('1.1.0-beta.3', '1.1.0-alpha.0')).toThrow(/downgrade/);
   });
 });
 

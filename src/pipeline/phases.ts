@@ -3,6 +3,8 @@ export const Phases = {
   CONSUME_CHANGESETS: 'consume-changesets',
   DETERMINE_VERSION: 'determine-version',
   CONFIRM_PUBLISH: 'confirm-publish',
+  PREFLIGHT: 'preflight',
+  RUN_BUILD: 'run-build',
   SYNC_DEPENDENCIES: 'sync-dependencies',
   WRITE_VERSIONS: 'write-versions',
   WRITE_CHANGELOG: 'write-changelog',

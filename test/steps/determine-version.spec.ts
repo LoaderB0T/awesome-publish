@@ -135,6 +135,45 @@ describe('determineVersionStep', () => {
     }
   });
 
+  it('throws when a changeset names an unknown package (B3)', async () => {
+    const ctx = makeCtx({
+      changesets: [{ id: 'x', summary: 'feat', releases: [{ name: 'typo-pkg', type: 'minor' }] }],
+    });
+    ctx.config.changesets = { enabled: true, enforceInPR: false };
+    await expect(determineVersionStep.execute(ctx as any)).rejects.toThrow(/unknown package/i);
+  });
+
+  it('escalates the prerelease base when a breaking change lands mid-beta (M10)', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({ status: 404, ok: false });
+    const origFetch = globalThis.fetch;
+    globalThis.fetch = mockFetch as any;
+    try {
+      const ctx = makeCtx({
+        cliArgs: { pre: 'beta' },
+        changesets: [{ id: 'a', summary: 'boom', releases: [{ name: 'pkg-a', type: 'major' }] }],
+        packages: [
+          { name: 'pkg-a', version: '1.1.0-beta.1', dir: '/tmp/a', packageJson: {}, config: {} },
+        ],
+      });
+      ctx.config.changesets = { enabled: true, enforceInPR: false };
+      const result = await determineVersionStep.execute(ctx as any);
+      // Breaking change → base escalates to 2.0.0, not stuck on 1.1.0.
+      expect(result.versionBumps.get('pkg-a')?.to).toBe('2.0.0-beta.0');
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+
+  it('applies changesets-style 0.x rule (no auto-graduate to 1.0.0)', async () => {
+    const ctx = makeCtx({
+      changesets: [{ id: 'a', summary: 'boom', releases: [{ name: 'pkg-a', type: 'major' }] }],
+      packages: [{ name: 'pkg-a', version: '0.3.2', dir: '/tmp/a', packageJson: {}, config: {} }],
+    });
+    ctx.config.changesets = { enabled: true, enforceInPR: false };
+    const result = await determineVersionStep.execute(ctx as any);
+    expect(result.versionBumps.get('pkg-a')?.to).toBe('0.4.0');
+  });
+
   it('handles already-prerelease version without double-bumping', async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       status: 200,

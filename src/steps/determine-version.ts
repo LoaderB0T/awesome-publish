@@ -1,3 +1,4 @@
+import semver from 'semver';
 import { AwesomeLogger } from 'awesome-logging';
 import { Phases } from '../pipeline/phases.js';
 import type { PipelineStep } from '../pipeline/step.js';
@@ -14,6 +15,7 @@ import {
   stripPrerelease,
   extractPreIdentifier,
   resolvePreVersion,
+  assertNoDowngrade,
 } from '../services/version.js';
 import { debug } from '../services/debug.js';
 
@@ -36,13 +38,17 @@ async function applyPrerelease(
     let baseVersion: string;
 
     if (bump.from.includes('-')) {
-      // Current version is already a prerelease — use its base to avoid double-bump
-      // e.g. 1.1.0-beta.1 → base is 1.1.0 (NOT bumpVersion("1.1.0", type) which double-bumps)
-      baseVersion = stripPrerelease(bump.from);
+      // Current version is already a prerelease. Use its base to avoid
+      // double-bumping (1.1.0-beta.1 → base 1.1.0, not bumpVersion("1.1.0")),
+      // BUT if the computed stable bump (bump.to) targets a higher base — e.g. a
+      // breaking change lands mid-beta so 1.1.0-beta.1 + major → 2.0.0 — escalate
+      // to that higher base so the prerelease series can advance (2.0.0-beta.0).
+      const currentBase = stripPrerelease(bump.from);
+      baseVersion = semver.gt(bump.to, currentBase) ? bump.to : currentBase;
       const currentPreId = extractPreIdentifier(bump.from);
       debug(
         'determine-version',
-        `${name}: current is pre (${currentPreId}), reusing base ${baseVersion}`
+        `${name}: current is pre (${currentPreId}), base ${baseVersion} (from ${currentBase}, bump.to ${bump.to})`
       );
     } else {
       // Stable → prerelease: use the bumped version as base
@@ -51,7 +57,18 @@ async function applyPrerelease(
     }
 
     try {
-      const preVersion = await resolvePreVersion(name, baseVersion, preId, registry);
+      let preVersion = await resolvePreVersion(name, baseVersion, preId, registry);
+      // Registry-behind-local retry: if package.json is already at a higher
+      // prerelease than the registry knows (a prior run bumped locally but the
+      // publish failed), advance from the local version so we don't resolve to a
+      // lower number and trip the downgrade guard.
+      if (bump.from.includes('-') && semver.lte(preVersion, bump.from)) {
+        const local = semver.inc(bump.from, 'prerelease', preId);
+        if (local && semver.gt(local, preVersion)) {
+          debug('determine-version', `${name}: registry behind local, advancing to ${local}`);
+          preVersion = local;
+        }
+      }
       debug('determine-version', `${name}: prerelease → ${preVersion}`);
       bump.to = preVersion;
     } catch (error: any) {
@@ -101,10 +118,35 @@ export const determineVersionStep: PipelineStep<
     ) {
       // No changesets on this run — nothing to release. Return empty bumps so
       // the pipeline is a clean no-op (publish/tag/release steps all skip) and
-      // CI stays green on ordinary commits instead of failing every push.
+      // CI stays green on ordinary commits instead of failing every push. Skip
+      // the git tag lookups below — there's nothing to compute notes for.
       console.log('No changesets found — nothing to release.');
-      return { versionBumps: bumps, isPrerelease: false };
+      return { versionBumps: bumps, isPrerelease: false, previousTags: new Map() };
     }
+
+    // Capture the latest existing tag per package NOW, before any later step
+    // (git-tag) creates the new release tag. Downstream steps (write-changelog,
+    // ai-notes-generate, github-release) read this stashed map to diff commits
+    // since the *previous* release — github-release runs after git-tag, so
+    // querying git itself there would return the tag we just created and yield
+    // an empty range.
+    const git = new GitService(ctx.rootDir);
+    const previousTags = new Map<string, string | null>();
+    for (const pkg of ctx.packages) {
+      previousTags.set(
+        pkg.name,
+        await git.getLatestTag(
+          tagMatchPrefix(pkg.name, ctx.packages.length, ctx.config.gitTag.prefix)
+        )
+      );
+    }
+
+    // Attach the stashed previous tags and guard against downgrades on the way
+    // out, for every resolution path.
+    const finalize = (resolved: Map<string, VersionBump>): VersionContext => {
+      for (const bump of resolved.values()) assertNoDowngrade(bump.from, bump.to);
+      return { versionBumps: resolved, isPrerelease: !!preId, previousTags };
+    };
 
     // 1. Changesets take priority
     if (ctx.config.changesets.enabled && changesets?.length) {
@@ -121,13 +163,27 @@ export const determineVersionStep: PipelineStep<
       }
       debug('determine-version', 'bump types from changesets', bumpTypes);
 
+      // Fail fast on a changeset that names a package we don't publish (typo,
+      // rename, or a package outside the current --filter). Silently dropping it
+      // and then consuming (deleting) the changeset would destroy release intent
+      // with no error. Point the user at the valid names.
+      const knownNames = new Set(ctx.packages.map(p => p.name));
+      const unknown = [...bumpTypes.keys()].filter(name => !knownNames.has(name));
+      if (unknown.length > 0) {
+        throw new Error(
+          `Changeset references unknown package(s): ${unknown.join(', ')}. ` +
+            `Known packages: ${[...knownNames].join(', ') || '(none)'}.`
+        );
+      }
+
       for (const pkg of ctx.packages) {
         const type = bumpTypes.get(pkg.name);
         if (type) {
           const bump: VersionBump = {
             packageName: pkg.name,
             from: pkg.version,
-            to: bumpVersion(pkg.version, type),
+            // zeroBased: automatic releases never graduate a 0.x package to 1.0.0.
+            to: bumpVersion(pkg.version, type, { zeroBased: true }),
             type,
           };
           debug('determine-version', `${pkg.name}: ${bump.from} → ${bump.to} (${type})`);
@@ -136,7 +192,7 @@ export const determineVersionStep: PipelineStep<
       }
 
       if (preId) await applyPrerelease(bumps, preId, registry, ctx.dryRun);
-      return { versionBumps: bumps, isPrerelease: !!preId };
+      return finalize(bumps);
     }
 
     // 2. Explicit --bump flag
@@ -148,6 +204,8 @@ export const determineVersionStep: PipelineStep<
         const bump: VersionBump = {
           packageName: pkg.name,
           from: pkg.version,
+          // Explicit --bump is the intentional escape hatch: no zeroBased demotion,
+          // so `--bump major` on a 0.x package can deliberately reach 1.0.0.
           to: bumpVersion(pkg.version, bumpType),
           type: bumpType,
         };
@@ -156,18 +214,19 @@ export const determineVersionStep: PipelineStep<
       }
 
       if (preId) await applyPrerelease(bumps, preId, registry, ctx.dryRun);
-      return { versionBumps: bumps, isPrerelease: !!preId };
+      return finalize(bumps);
     }
 
     // 3. Conventional commits auto-detection
     if (ctx.config.conventionalCommits) {
-      const git = new GitService(ctx.rootDir);
-
       for (const pkg of ctx.packages) {
-        const latestTag = await git.getLatestTag(
-          tagMatchPrefix(pkg.name, ctx.packages.length, ctx.config.gitTag.prefix)
-        );
-        const commits = latestTag ? await git.getCommitsSinceTag(latestTag) : [];
+        const latestTag = previousTags.get(pkg.name) ?? null;
+        // First-ever release (no tag yet): scan the whole history so an initial
+        // release is possible in conventional-commits mode, instead of finding
+        // zero commits and erroring out in CI.
+        const commits = latestTag
+          ? await git.getCommitsSinceTag(latestTag)
+          : await git.getAllCommits();
         debug(
           'determine-version',
           `${pkg.name}: ${commits.length} commits since ${latestTag ?? 'beginning'}`
@@ -178,7 +237,8 @@ export const determineVersionStep: PipelineStep<
           const bump: VersionBump = {
             packageName: pkg.name,
             from: pkg.version,
-            to: bumpVersion(pkg.version, detected),
+            // zeroBased: automatic releases never graduate a 0.x package to 1.0.0.
+            to: bumpVersion(pkg.version, detected, { zeroBased: true }),
             type: detected,
           };
           debug('determine-version', `${pkg.name}: conventional commits → ${detected}`);
@@ -188,7 +248,7 @@ export const determineVersionStep: PipelineStep<
 
       if (bumps.size > 0) {
         if (preId) await applyPrerelease(bumps, preId, registry, ctx.dryRun);
-        return { versionBumps: bumps, isPrerelease: !!preId };
+        return finalize(bumps);
       }
       debug('determine-version', 'no conventional commits matched bump types');
     }
@@ -220,6 +280,6 @@ export const determineVersionStep: PipelineStep<
 
     if (preId) await applyPrerelease(bumps, preId, registry, ctx.dryRun);
     debug('determine-version', `total bumps: ${bumps.size}`);
-    return { versionBumps: bumps, isPrerelease: !!preId };
+    return finalize(bumps);
   },
 };

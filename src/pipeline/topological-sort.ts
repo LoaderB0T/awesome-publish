@@ -3,6 +3,13 @@ import type { PipelineStep } from './step.js';
 export function topologicalSort(steps: PipelineStep<any, any>[]): PipelineStep<any, any>[] {
   const phaseToStep = new Map<string, PipelineStep<any, any>>();
   for (const step of steps) {
+    // Two steps sharing a phase would collapse to one here and later surface as
+    // a bogus "cycle detected"; fail with the real cause instead.
+    if (phaseToStep.has(step.phase)) {
+      throw new Error(
+        `Duplicate pipeline phase "${step.phase}" (steps "${phaseToStep.get(step.phase)!.name}" and "${step.name}") — each phase must be unique.`
+      );
+    }
     phaseToStep.set(step.phase, step);
   }
 

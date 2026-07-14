@@ -24,13 +24,15 @@ function parseMetaComments(body: string): { meta: ChangesetMeta; summary: string
   return { meta: Object.keys(meta).length > 0 ? meta : {}, summary: remaining.join('\n').trim() };
 }
 
-function parseChangesetFile(filePath: string): Changeset | null {
-  // Normalize CRLF so the frontmatter regex matches on Windows-authored files.
-  const content = readFileSync(filePath, 'utf-8').replace(/\r\n/g, '\n');
-  const match = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+export function parseChangesetFile(filePath: string): Changeset | null {
+  // Strip a leading UTF-8 BOM (Windows editors add one) and normalize CRLF so
+  // the frontmatter regex matches. Tolerate a closing `---` at EOF with no
+  // trailing newline or body.
+  const content = readFileSync(filePath, 'utf-8').replace(/^﻿/, '').replace(/\r\n/g, '\n');
+  const match = content.match(/^---\n([\s\S]*?)\n---(?:\n([\s\S]*))?$/);
   if (!match) return null;
 
-  const [, frontmatter, body] = match;
+  const [, frontmatter, body = ''] = match;
   const releases: Changeset['releases'] = [];
 
   for (const line of frontmatter.split('\n')) {
@@ -40,7 +42,16 @@ function parseChangesetFile(filePath: string): Changeset | null {
     }
   }
 
-  if (releases.length === 0) return null;
+  if (releases.length === 0) {
+    // Frontmatter present but no valid `"pkg": patch|minor|major` line — likely a
+    // typo (e.g. `pattch`) or an unquoted name. Warn loudly rather than silently
+    // dropping a file the user believes queues a release.
+    console.warn(
+      `⚠ Changeset ${basename(filePath)} has frontmatter but no valid release line ` +
+        `(expected \`"package-name": patch|minor|major\`) — ignoring.`
+    );
+    return null;
+  }
 
   const { meta, summary } = parseMetaComments(body);
 
