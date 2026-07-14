@@ -9,6 +9,7 @@ import { buildTempDirStep } from '../steps/build-temp-dir.js';
 import { modifyPackageJsonStep } from '../steps/modify-package-json.js';
 import { publishNpmStep } from '../steps/publish-npm.js';
 import { packLocalStep } from '../steps/pack-local.js';
+import { gitCommitStep } from '../steps/git-commit.js';
 import { gitTagStep } from '../steps/git-tag.js';
 import { cleanupStep } from '../steps/cleanup.js';
 import { readChangesetsStep } from '../steps/read-changesets.js';
@@ -38,7 +39,7 @@ function getCoreFeaturesForCommand(command: Command, config: ResolvedConfig): Pi
 
   switch (command) {
     case 'publish':
-      steps.push(buildTempDirStep, modifyPackageJsonStep, publishNpmStep);
+      steps.push(buildTempDirStep, modifyPackageJsonStep, publishNpmStep, gitCommitStep);
       if (config.gitTag.enabled) steps.push(gitTagStep);
       steps.push(cleanupStep);
       break;
@@ -46,6 +47,7 @@ function getCoreFeaturesForCommand(command: Command, config: ResolvedConfig): Pi
       steps.push(buildTempDirStep, modifyPackageJsonStep, packLocalStep, cleanupStep);
       break;
     case 'version':
+      steps.push(gitCommitStep);
       if (config.gitTag.enabled) steps.push(gitTagStep);
       steps.push(cleanupStep);
       break;

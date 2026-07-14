@@ -25,6 +25,19 @@ export const buildTempDirStep: PipelineStep<unknown, TempDirContext> = {
 
       cpSync(join(pkg.dir, 'package.json'), join(tempDir, 'package.json'));
 
+      // Copy .npmrc into the temp dir so registry auth is resolved when we
+      // publish from os.tmpdir() (outside the repo). CI (actions/setup-node)
+      // writes .npmrc to the workspace root; a package-local .npmrc wins.
+      const rootDir = (ctx as any).rootDir as string | undefined;
+      for (const srcDir of [rootDir, pkg.dir]) {
+        if (!srcDir) continue;
+        const npmrc = join(srcDir, '.npmrc');
+        if (existsSync(npmrc)) {
+          cpSync(npmrc, join(tempDir, '.npmrc'));
+          debug('build-temp-dir', `${pkg.name}: copied .npmrc from ${srcDir}`);
+        }
+      }
+
       for (const entry of pkg.config.publishFiles) {
         const src = resolve(pkg.dir, entry);
         if (!existsSync(src)) {

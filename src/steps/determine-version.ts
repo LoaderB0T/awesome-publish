@@ -87,8 +87,13 @@ export const determineVersionStep: PipelineStep<
     debug('determine-version', 'conventional commits', ctx.config.conventionalCommits);
     debug('determine-version', 'prerelease', preId ?? 'none');
 
-    if (ctx.config.changesets.enabled && !changesets?.length && ctx.mode === 'ci' && !preId) {
-      throw new Error('No changesets found. Add a changeset before publishing in CI mode, or use --bump to override.');
+    const rawBumpArg = (ctx as any).cliArgs?.bump as string | undefined;
+    if (ctx.config.changesets.enabled && !changesets?.length && ctx.mode === 'ci' && !preId && !rawBumpArg) {
+      // No changesets on this run — nothing to release. Return empty bumps so
+      // the pipeline is a clean no-op (publish/tag/release steps all skip) and
+      // CI stays green on ordinary commits instead of failing every push.
+      console.log('No changesets found — nothing to release.');
+      return { versionBumps: bumps, isPrerelease: false };
     }
 
     // 1. Changesets take priority

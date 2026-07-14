@@ -54,4 +54,24 @@ describe('GitService', () => {
     const tag = await git.getLatestTag();
     expect(tag).toBeNull();
   });
+
+  it('tagExists reports whether a tag is present', async () => {
+    expect(await git.tagExists('v1.0.0')).toBe(false);
+    await git.createTag('v1.0.0');
+    expect(await git.tagExists('v1.0.0')).toBe(true);
+  });
+
+  it('commitAll stages and commits, leaving a clean tree', async () => {
+    writeFileSync(join(dir, 'pkg.txt'), 'bumped');
+    await git.commitAll('chore: release v1.2.3');
+    expect(await git.isWorkingTreeClean()).toBe(true);
+    const { stdout } = await import('node:child_process').then(cp =>
+      new Promise<{ stdout: string }>((res, rej) =>
+        cp.execFile('git', ['log', '-1', '--format=%s'], { cwd: dir }, (e, out) =>
+          e ? rej(e) : res({ stdout: out }),
+        ),
+      ),
+    );
+    expect(stdout.trim()).toBe('chore: release v1.2.3');
+  });
 });

@@ -13,7 +13,7 @@ export const createGithubReleaseStep: PipelineStep<PublishContext & VersionConte
   before: [Phases.CLEANUP],
   hasSideEffects: true,
 
-  shouldRun: (ctx) => ctx.config.github.releases.enabled,
+  shouldRun: (ctx) => ctx.config.github.releases.enabled && ctx.versionBumps?.size > 0,
 
   async execute(ctx): Promise<GithubReleaseContext> {
     const token = process.env.GITHUB_TOKEN;

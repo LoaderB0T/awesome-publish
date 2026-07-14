@@ -47,6 +47,21 @@ describe('determineVersionStep', () => {
     });
   });
 
+  it('is a no-op (empty bumps) in CI when changesets enabled but none present', async () => {
+    const ctx = makeCtx();
+    ctx.config.changesets = { enabled: true, enforceInPR: false };
+    const result = await determineVersionStep.execute(ctx as any);
+    expect(result.versionBumps.size).toBe(0);
+    expect(result.isPrerelease).toBe(false);
+  });
+
+  it('lets --bump override in CI even when changesets enabled but none present', async () => {
+    const ctx = makeCtx({ cliArgs: { bump: 'patch' } });
+    ctx.config.changesets = { enabled: true, enforceInPR: false };
+    const result = await determineVersionStep.execute(ctx as any);
+    expect(result.versionBumps.get('pkg-a')?.to).toBe('1.0.1');
+  });
+
   it('uses --bump arg in CI mode without changesets', async () => {
     const ctx = makeCtx({ cliArgs: { bump: 'patch' } });
     const result = await determineVersionStep.execute(ctx as any);

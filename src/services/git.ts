@@ -45,8 +45,32 @@ export class GitService {
     await this.exec('git', ['tag', tag]);
   }
 
-  async pushTags(): Promise<void> {
-    await this.exec('git', ['push', '--tags']);
+  async tagExists(tag: string): Promise<boolean> {
+    const { stdout } = await this.exec('git', ['tag', '--list', tag]);
+    return stdout.trim() !== '';
+  }
+
+  /**
+   * Stage all changes and create a release commit.
+   * ponytail: `git add -A` assumes a clean tree before the release (the default
+   * requireCleanGit gate guarantees this). With --ignore-git the user has opted
+   * out, so any pre-existing dirty state is folded into the release commit.
+   */
+  async commitAll(message: string): Promise<void> {
+    await this.exec('git', ['add', '-A']);
+    await this.exec('git', ['commit', '-m', message]);
+  }
+
+  async pushCurrentBranch(): Promise<void> {
+    await this.exec('git', ['push']);
+  }
+
+  async pushTags(tags?: string[]): Promise<void> {
+    if (tags && tags.length > 0) {
+      await this.exec('git', ['push', 'origin', ...tags]);
+    } else {
+      await this.exec('git', ['push', '--tags']);
+    }
   }
 
   async getStagedFiles(): Promise<string[]> {

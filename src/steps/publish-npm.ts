@@ -48,7 +48,13 @@ export const publishNpmStep: PipelineStep<TempDirContext & VersionContext, Publi
       if (!tempDir) continue;
 
       const bump = ctx.versionBumps.get(pkg.name);
-      const version = bump?.to ?? pkg.version;
+      // Skip packages with no version bump — nothing to publish (avoids
+      // re-publishing the current version, which would 403 as already-exists).
+      if (!bump) {
+        debug('publish-npm', `${pkg.name}: no version bump, skipping`);
+        continue;
+      }
+      const version = bump.to;
 
       debug('publish-npm', `publishing ${pkg.name}@${version} from ${tempDir}`);
 
@@ -85,11 +91,18 @@ export const publishNpmStep: PipelineStep<TempDirContext & VersionContext, Publi
       }
     }
 
-    // If any packages failed, report them but don't throw — let pipeline continue for cleanup
+    // Fail fast if any package failed to publish. Throwing here stops the
+    // pipeline before git-tag / github-release run and before cleanup removes
+    // the temp dirs, so tags/releases are never created for an unpublished
+    // package and the temp dirs are preserved for inspection/retry.
     const failed = [...results.values()].filter(r => r.status === 'failed');
     if (failed.length > 0) {
       const summary = failed.map(f => `  ${f.packageName}@${f.version}: ${f.error}`).join('\n');
-      console.error(`\nFailed to publish ${failed.length} package(s):\n${summary}`);
+      const published = [...results.values()].filter(r => r.status === 'published');
+      const publishedSummary = published.length
+        ? `\nAlready published this run: ${published.map(p => `${p.packageName}@${p.version}`).join(', ')}`
+        : '';
+      throw new Error(`Failed to publish ${failed.length} package(s):\n${summary}${publishedSummary}`);
     }
 
     return { publishResults: results };

@@ -26,7 +26,7 @@ export const generateAiNotesStep: PipelineStep<VersionContext & { rootDir: strin
   before: [Phases.PUBLISH_NPM],
   hasSideEffects: false,
 
-  shouldRun: (ctx) => ctx.config.aiReleaseNotes.enabled,
+  shouldRun: (ctx) => ctx.config.aiReleaseNotes.enabled && ctx.versionBumps?.size > 0,
 
   async execute(ctx): Promise<AiNotesContext> {
     const provider = createAiProvider(ctx.config);

@@ -34,6 +34,7 @@ const STEP_LABELS: Record<string, string> = {
   'modify-package-json': 'Modify package.json',
   'publish-npm': 'Publish to npm',
   'pack-local': 'Pack locally',
+  'git-commit': 'Commit release',
   'git-tag': 'Create git tags',
   'github-release': 'Create GitHub release',
   'ai-notes-publish': 'Publish AI notes to release',
