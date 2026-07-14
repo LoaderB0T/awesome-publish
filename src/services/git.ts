@@ -11,12 +11,12 @@ export interface Commit {
 export class GitService {
   constructor(private readonly cwd: string) {}
 
-  async isWorkingTreeClean(): Promise<boolean> {
+  public async isWorkingTreeClean(): Promise<boolean> {
     const { stdout } = await this.exec('git', ['status', '--porcelain']);
     return stdout.trim() === '';
   }
 
-  async getLatestTag(prefix?: string): Promise<string | null> {
+  public async getLatestTag(prefix?: string): Promise<string | null> {
     try {
       const args = ['describe', '--tags', '--abbrev=0'];
       if (prefix) {
@@ -29,7 +29,7 @@ export class GitService {
     }
   }
 
-  async getCommitsSinceTag(tag: string): Promise<Commit[]> {
+  public async getCommitsSinceTag(tag: string): Promise<Commit[]> {
     const { stdout } = await this.exec('git', [
       'log',
       `${tag}..HEAD`,
@@ -46,11 +46,11 @@ export class GitService {
     return commits;
   }
 
-  async createTag(tag: string): Promise<void> {
+  public async createTag(tag: string): Promise<void> {
     await this.exec('git', ['tag', tag]);
   }
 
-  async tagExists(tag: string): Promise<boolean> {
+  public async tagExists(tag: string): Promise<boolean> {
     const { stdout } = await this.exec('git', ['tag', '--list', tag]);
     return stdout.trim() !== '';
   }
@@ -61,16 +61,16 @@ export class GitService {
    * requireCleanGit gate guarantees this). With --ignore-git the user has opted
    * out, so any pre-existing dirty state is folded into the release commit.
    */
-  async commitAll(message: string): Promise<void> {
+  public async commitAll(message: string): Promise<void> {
     await this.exec('git', ['add', '-A']);
     await this.exec('git', ['commit', '-m', message]);
   }
 
-  async pushCurrentBranch(): Promise<void> {
+  public async pushCurrentBranch(): Promise<void> {
     await this.exec('git', ['push']);
   }
 
-  async pushTags(tags?: string[]): Promise<void> {
+  public async pushTags(tags?: string[]): Promise<void> {
     if (tags && tags.length > 0) {
       await this.exec('git', ['push', 'origin', ...tags]);
     } else {
@@ -78,12 +78,12 @@ export class GitService {
     }
   }
 
-  async getStagedFiles(): Promise<string[]> {
+  public async getStagedFiles(): Promise<string[]> {
     const { stdout } = await this.exec('git', ['diff', '--cached', '--name-only']);
     return stdout.trim().split('\n').filter(Boolean);
   }
 
-  async getUserName(): Promise<string | null> {
+  public async getUserName(): Promise<string | null> {
     try {
       const { stdout } = await this.exec('git', ['config', 'user.name']);
       return stdout.trim() || null;
@@ -92,7 +92,7 @@ export class GitService {
     }
   }
 
-  async getUserEmail(): Promise<string | null> {
+  public async getUserEmail(): Promise<string | null> {
     try {
       const { stdout } = await this.exec('git', ['config', 'user.email']);
       return stdout.trim() || null;
@@ -101,7 +101,7 @@ export class GitService {
     }
   }
 
-  async getChangedFilesSince(branch: string): Promise<string[]> {
+  public async getChangedFilesSince(branch: string): Promise<string[]> {
     try {
       const { stdout } = await this.exec('git', ['diff', '--name-only', `${branch}...HEAD`]);
       return stdout.trim().split('\n').filter(Boolean);
