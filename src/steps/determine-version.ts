@@ -1,3 +1,4 @@
+import { relative } from 'node:path';
 import semver from 'semver';
 import { AwesomeLogger } from 'awesome-logging';
 import { Phases } from '../pipeline/phases.js';
@@ -228,12 +229,19 @@ export const determineVersionStep: PipelineStep<
     if (ctx.config.conventionalCommits) {
       for (const pkg of ctx.packages) {
         const latestTag = previousTags.get(pkg.name) ?? null;
+        // In a monorepo, scope the commit range to the package's own directory
+        // (same as write-changelog) — otherwise every package bumps on any
+        // repo-wide fix/feat commit and ships a bogus "Version bump" release.
+        const scope =
+          (ctx.totalPackageCount ?? ctx.packages.length) > 1
+            ? relative(ctx.rootDir, pkg.dir)
+            : undefined;
         // First-ever release (no tag yet): scan the whole history so an initial
         // release is possible in conventional-commits mode, instead of finding
         // zero commits and erroring out in CI.
         const commits = latestTag
-          ? await git.getCommitsSinceTag(latestTag)
-          : await git.getAllCommits();
+          ? await git.getCommitsSinceTag(latestTag, scope)
+          : await git.getAllCommits(scope);
         debug(
           'determine-version',
           `${pkg.name}: ${commits.length} commits since ${latestTag ?? 'beginning'}`

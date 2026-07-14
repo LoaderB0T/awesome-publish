@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
@@ -16,6 +16,31 @@ function repoWithCommit(message: string): string {
   writeFileSync(join(dir, 'f.txt'), 'x');
   execFileSync('git', ['add', '.'], { cwd: dir });
   execFileSync('git', ['commit', '-m', message], { cwd: dir });
+  return dir;
+}
+
+/**
+ * A temp git repo with two packages under packages/a and packages/b. One extra
+ * commit (with `commitMsg`) touches ONLY packages/a.
+ */
+function monorepoRepo(commitMsg: string): string {
+  const dir = mkdtempSync(join(tmpdir(), 'ap-dv-mono-'));
+  execFileSync('git', ['init'], { cwd: dir });
+  execFileSync('git', ['config', 'user.email', 'test@test.com'], { cwd: dir });
+  execFileSync('git', ['config', 'user.name', 'Test'], { cwd: dir });
+  for (const name of ['a', 'b']) {
+    mkdirSync(join(dir, 'packages', name), { recursive: true });
+    writeFileSync(
+      join(dir, 'packages', name, 'package.json'),
+      JSON.stringify({ name: `pkg-${name}`, version: '1.0.0' })
+    );
+  }
+  execFileSync('git', ['add', '.'], { cwd: dir });
+  execFileSync('git', ['commit', '-m', 'chore: scaffold'], { cwd: dir });
+  // A change confined to packages/a.
+  writeFileSync(join(dir, 'packages', 'a', 'index.js'), 'export default 1;');
+  execFileSync('git', ['add', '.'], { cwd: dir });
+  execFileSync('git', ['commit', '-m', commitMsg], { cwd: dir });
   return dir;
 }
 
@@ -209,6 +234,35 @@ describe('determineVersionStep', () => {
     ctx.config.conventionalCommits = true;
     const result = await determineVersionStep.execute(ctx as any);
     expect(result.versionBumps.get('pkg-a')?.to).toBe('1.1.0');
+  });
+
+  it('scopes conventional-commit bumps per package dir in a monorepo (B1)', async () => {
+    const rootDir = monorepoRepo('fix: correct a bug in pkg-a');
+    const ctx = makeCtx({
+      rootDir,
+      totalPackageCount: 2,
+      packages: [
+        {
+          name: 'pkg-a',
+          version: '1.0.0',
+          dir: join(rootDir, 'packages', 'a'),
+          packageJson: {},
+          config: {},
+        },
+        {
+          name: 'pkg-b',
+          version: '1.0.0',
+          dir: join(rootDir, 'packages', 'b'),
+          packageJson: {},
+          config: {},
+        },
+      ],
+    });
+    ctx.config.conventionalCommits = true;
+    const result = await determineVersionStep.execute(ctx as any);
+    // The fix touched only packages/a — pkg-b must NOT be bumped/published.
+    expect(result.versionBumps.get('pkg-a')?.to).toBe('1.0.1');
+    expect(result.versionBumps.has('pkg-b')).toBe(false);
   });
 
   it('still errors in CI when NO versioning strategy is configured at all', async () => {

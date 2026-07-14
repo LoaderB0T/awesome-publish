@@ -1,5 +1,13 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { mkdtempSync, writeFileSync, mkdirSync, existsSync, readFileSync, rmSync } from 'node:fs';
+import {
+  mkdtempSync,
+  writeFileSync,
+  mkdirSync,
+  existsSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { buildTempDirStep } from '../../src/steps/build-temp-dir.js';
@@ -134,6 +142,32 @@ describe('buildTempDirStep', () => {
     };
 
     await expect(buildTempDirStep.execute(ctx as any)).rejects.toThrow(/empty|matched/i);
+  });
+
+  it('cleans up the temp dir (and its copied .npmrc) when the empty-guard throws', async () => {
+    const pkgDir = mkdtempSync(join(tmpdir(), 'ap-build-leak-'));
+    writeFileSync(join(pkgDir, 'package.json'), JSON.stringify({ name: 'leak', version: '1.0.0' }));
+    // .npmrc carries the auth token — it must never be orphaned in tmpdir.
+    writeFileSync(join(pkgDir, '.npmrc'), '//registry.npmjs.org/:_authToken=secret');
+    const config = { publishFiles: ['dist'] } as ResolvedConfig; // matches nothing → throws
+
+    const ctx = {
+      config,
+      rootDir: pkgDir,
+      packages: [{ name: 'leak', version: '1.0.0', dir: pkgDir, packageJson: {}, config }],
+      versionBumps: new Map([
+        ['leak', { packageName: 'leak', from: '1.0.0', to: '1.0.1', type: 'patch' }],
+      ]),
+      mode: 'ci' as const,
+      dryRun: false,
+    };
+
+    const before = readdirSync(tmpdir()).filter(n => n.startsWith('awesome-publish-leak-'));
+    await expect(buildTempDirStep.execute(ctx as any)).rejects.toThrow(/empty|matched/i);
+    const after = readdirSync(tmpdir()).filter(n => n.startsWith('awesome-publish-leak-'));
+
+    // No new awesome-publish temp dir was left behind on the failure path.
+    expect(after).toEqual(before);
   });
 
   it('does NOT throw on an empty match for a no-bump sibling under `publish`', async () => {
