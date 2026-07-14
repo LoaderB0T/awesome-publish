@@ -31,8 +31,9 @@ describe('publishNpmStep', () => {
   });
 
   it('throws when a package fails to publish (fail-fast)', async () => {
+    // A permission 403 is non-transient (not retried) and must fail, not skip.
     publishMock.mockImplementation(async () => {
-      throw new Error('500 Internal Server Error');
+      throw new Error('403 Forbidden: you do not have permission to publish');
     });
     let err: Error | undefined;
     try {
@@ -43,9 +44,9 @@ describe('publishNpmStep', () => {
     expect(err?.message).toMatch(/Failed to publish/);
   });
 
-  it('treats 403/already-published as skipped, not a failure', async () => {
+  it('treats a version-conflict as skipped, not a failure', async () => {
     publishMock.mockImplementation(async () => {
-      throw new Error('403 Forbidden: previously published');
+      throw new Error('403 Forbidden: cannot publish over the previously published version');
     });
     const result = await publishNpmStep.execute(makeCtx());
     expect(result.publishResults.get('pkg-a')?.status).toBe('skipped-already-exists');

@@ -4,7 +4,21 @@ import type { PipelineStep } from '../pipeline/step.js';
 import type { TempDirContext, VersionContext, PublishContext } from '../pipeline/context.js';
 import type { PublishResult } from '../types/package-info.js';
 import { createAdapter } from '../services/package-manager.js';
+import { withRetry, isTransientError } from '../services/retry.js';
 import { debug } from '../services/debug.js';
+
+// A publish failure that means "this version is already on the registry" —
+// safe to treat as skip. Distinct from other 403s (permission denied, OTP
+// required, org membership) which are real failures.
+function isVersionConflict(msg: string): boolean {
+  return (
+    msg.includes('409') ||
+    /EPUBLISHCONFLICT/i.test(msg) ||
+    /cannot publish over/i.test(msg) ||
+    /previously published/i.test(msg) ||
+    /over the previously published/i.test(msg)
+  );
+}
 
 async function resolveOtp(ctx: any): Promise<string | undefined> {
   const cliOtp = ctx.cliArgs?.otp as string | undefined;
@@ -39,10 +53,13 @@ export const publishNpmStep: PipelineStep<TempDirContext & VersionContext, Publi
       ((ctx as any).cliArgs?.pre as string | undefined);
 
     const registry = ((ctx as any).cliArgs?.registry as string | undefined) ?? ctx.config.registry;
+    const provenance =
+      ((ctx as any).cliArgs?.provenance as boolean | undefined) ?? ctx.config.provenance;
     debug('publish-npm', 'package manager', ctx.config.packageManager);
     debug('publish-npm', 'registry', registry);
     debug('publish-npm', 'otp provided', !!otp);
     debug('publish-npm', 'dist-tag', tag ?? 'latest');
+    debug('publish-npm', 'provenance', provenance);
 
     for (const pkg of ctx.packages) {
       const tempDir = ctx.tempDirs.get(pkg.name);
@@ -59,8 +76,17 @@ export const publishNpmStep: PipelineStep<TempDirContext & VersionContext, Publi
 
       debug('publish-npm', `publishing ${pkg.name}@${version} from ${tempDir}`);
 
+      // --access only applies to scoped packages; npm warns/ignores it otherwise.
+      const access = pkg.name.startsWith('@') ? ctx.config.access : undefined;
+
       try {
-        await adapter.publish(tempDir, tag, otp, registry);
+        await withRetry(
+          () => adapter.publish(tempDir, { tag, otp, registry, access, provenance }),
+          {
+            label: `publish ${pkg.name}`,
+            shouldRetry: err => isTransientError(err),
+          }
+        );
         debug('publish-npm', `${pkg.name}@${version} published successfully`);
         results.set(pkg.name, {
           packageName: pkg.name,
@@ -71,7 +97,7 @@ export const publishNpmStep: PipelineStep<TempDirContext & VersionContext, Publi
       } catch (error: any) {
         const msg = error?.message ?? String(error);
         debug('publish-npm', `${pkg.name} publish error`, msg);
-        if (msg.includes('403') || msg.includes('409') || msg.includes('previously published')) {
+        if (isVersionConflict(msg)) {
           debug('publish-npm', `${pkg.name}@${version} already exists, skipping`);
           results.set(pkg.name, {
             packageName: pkg.name,

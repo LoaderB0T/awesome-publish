@@ -8,6 +8,7 @@ import { resolvePackages } from '../../services/workspace.js';
 import { GitService } from '../../services/git.js';
 import { determineBumpFromCommits } from '../../services/conventional-commits.js';
 import { bumpVersion, highestBump } from '../../services/version.js';
+import { tagMatchPrefix } from '../../steps/git-tag.js';
 import { setDebug, debug } from '../../services/debug.js';
 import type { Changeset } from '../../types/changeset.js';
 
@@ -79,7 +80,9 @@ export const statusCommand = defineCommand({
     // Show packages
     console.log(`📦 Packages (${packages.length}):`);
     for (const pkg of packages) {
-      const latestTag = await git.getLatestTag(packages.length === 1 ? undefined : pkg.name);
+      const latestTag = await git.getLatestTag(
+        tagMatchPrefix(pkg.name, packages.length, config.gitTag.prefix)
+      );
       const commits = latestTag ? await git.getCommitsSinceTag(latestTag) : [];
       const commitCount = commits.length;
 

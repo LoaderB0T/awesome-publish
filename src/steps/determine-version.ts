@@ -5,6 +5,7 @@ import type { ChangesetContext, VersionContext } from '../pipeline/context.js';
 import type { VersionBump } from '../types/package-info.js';
 import type { Changeset } from '../types/changeset.js';
 import { GitService } from '../services/git.js';
+import { tagMatchPrefix } from './git-tag.js';
 import { determineBumpFromCommits } from '../services/conventional-commits.js';
 import {
   bumpVersion,
@@ -163,7 +164,9 @@ export const determineVersionStep: PipelineStep<
       const git = new GitService(ctx.rootDir);
 
       for (const pkg of ctx.packages) {
-        const latestTag = await git.getLatestTag(ctx.packages.length === 1 ? undefined : pkg.name);
+        const latestTag = await git.getLatestTag(
+          tagMatchPrefix(pkg.name, ctx.packages.length, ctx.config.gitTag.prefix)
+        );
         const commits = latestTag ? await git.getCommitsSinceTag(latestTag) : [];
         debug(
           'determine-version',

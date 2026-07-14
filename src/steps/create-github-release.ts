@@ -1,9 +1,9 @@
 import { Phases } from '../pipeline/phases.js';
 import type { PipelineStep } from '../pipeline/step.js';
 import type { PublishContext, VersionContext, GithubReleaseContext } from '../pipeline/context.js';
-import { GitHubService } from '../services/github.js';
+import { GitHubService, parseGitHubRepo } from '../services/github.js';
 import { GitService } from '../services/git.js';
-import { buildTagName } from './git-tag.js';
+import { buildTagName, tagMatchPrefix } from './git-tag.js';
 import { debug } from '../services/debug.js';
 
 export const createGithubReleaseStep: PipelineStep<
@@ -23,7 +23,7 @@ export const createGithubReleaseStep: PipelineStep<
     if (!token)
       throw new Error('GITHUB_TOKEN environment variable is required for GitHub releases');
 
-    const { owner, repo } = await getRepoInfo(ctx.rootDir);
+    const { owner, repo } = await parseGitHubRepo(ctx.rootDir);
     debug('github-release', `repo: ${owner}/${repo}`);
     debug('github-release', 'mode', ctx.config.github.releases.mode);
 
@@ -50,7 +50,9 @@ export const createGithubReleaseStep: PipelineStep<
         if (!bump) continue;
         const tag = buildTagName(pkg.name, bump.to, ctx.packages.length, ctx.config.gitTag.prefix);
         debug('github-release', `creating release for ${pkg.name}: ${tag}`);
-        const latestTag = await git.getLatestTag(pkg.name);
+        const latestTag = await git.getLatestTag(
+          tagMatchPrefix(pkg.name, ctx.packages.length, ctx.config.gitTag.prefix)
+        );
         const body = latestTag
           ? (await git.getCommitsSinceTag(latestTag)).map(c => `- ${c.message}`).join('\n')
           : '';
@@ -64,21 +66,11 @@ export const createGithubReleaseStep: PipelineStep<
   },
 };
 
-function buildCombinedReleaseBody(ctx: PublishContext & VersionContext): string {
+export function buildCombinedReleaseBody(ctx: PublishContext & VersionContext): string {
   const lines: string[] = ['## Published packages\n'];
   for (const [name] of ctx.publishResults) {
     const bump = ctx.versionBumps.get(name);
     if (bump) lines.push(`- **${name}**: ${bump.from} → ${bump.to}`);
   }
   return lines.join('\n');
-}
-
-async function getRepoInfo(cwd: string): Promise<{ owner: string; repo: string }> {
-  const { execFile } = await import('node:child_process');
-  const { promisify } = await import('node:util');
-  const exec = promisify(execFile);
-  const { stdout } = await exec('git', ['remote', 'get-url', 'origin'], { cwd });
-  const match = stdout.trim().match(/[:/]([^/]+)\/([^/.]+?)(?:\.git)?$/);
-  if (!match) throw new Error('Could not parse GitHub owner/repo from git remote');
-  return { owner: match[1], repo: match[2] };
 }

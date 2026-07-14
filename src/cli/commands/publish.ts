@@ -6,8 +6,8 @@ import { detectPackageManager } from '../../services/package-manager.js';
 import { resolvePackages } from '../../services/workspace.js';
 import { buildPipeline } from '../../pipeline/build-pipeline.js';
 import { runPipeline } from '../../pipeline/pipeline.js';
-import { GitService } from '../../services/git.js';
 import { validatePreIdentifier } from '../../services/version.js';
+import { assertGitClean } from '../git-check.js';
 import { setDebug, debug } from '../../services/debug.js';
 
 export const publishCommand = defineCommand({
@@ -19,6 +19,10 @@ export const publishCommand = defineCommand({
     pre: {
       type: 'string',
       description: 'Publish as prerelease (e.g. --pre beta, --pre alpha, --pre rc)',
+    },
+    provenance: {
+      type: 'boolean',
+      description: 'Publish with npm provenance (requires OIDC, e.g. GitHub Actions id-token)',
     },
   },
   async run({ args }) {
@@ -41,29 +45,7 @@ export const publishCommand = defineCommand({
       : validateConfig({ publishFiles: ['lib'], stripScripts: true }, pm);
     debug('publish', 'resolved config', config);
 
-    if (config.requireCleanGit && !args['ignore-git']) {
-      const git = new GitService(rootDir);
-      try {
-        const clean = await git.isWorkingTreeClean();
-        debug('publish', 'git clean', clean);
-        if (!clean) {
-          throw new Error(
-            'Working tree is not clean. Commit or stash changes, or use --ignore-git'
-          );
-        }
-      } catch (error: any) {
-        // I4: Friendly error when not in a git repo
-        if (
-          error?.message?.includes('not a git repository') ||
-          error?.stderr?.includes('not a git repository')
-        ) {
-          throw new Error(
-            'Not a git repository. Run "git init" first, or use --ignore-git to skip git checks'
-          );
-        }
-        throw error;
-      }
-    }
+    await assertGitClean(rootDir, config, args['ignore-git']);
 
     const packages = await resolvePackages(rootDir, config, args.filter);
     debug(
@@ -90,7 +72,14 @@ export const publishCommand = defineCommand({
       dryRun,
       debug: args.debug ?? false,
       rootDir,
-      cliArgs: { bump: args.bump, tag: args.tag, otp: args.otp, registry: args.registry, pre },
+      cliArgs: {
+        bump: args.bump,
+        tag: args.tag,
+        otp: args.otp,
+        registry: args.registry,
+        pre,
+        provenance: args.provenance,
+      },
     };
 
     const result = await runPipeline(steps, ctx as any);

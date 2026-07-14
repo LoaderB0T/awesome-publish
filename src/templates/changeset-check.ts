@@ -16,7 +16,7 @@ jobs:
           if git diff --name-only origin/main...HEAD | grep -q "^.changeset/.*\\.md$"; then
             echo "Changeset found"
           else
-            echo "::error::No changeset found. Please add a changeset with: npx changeset"
+            echo "::error::No changeset found. Please add a changeset with: npx awesome-publish changeset"
             exit 1
           fi
 `;

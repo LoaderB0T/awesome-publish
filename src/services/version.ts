@@ -1,32 +1,20 @@
+import semver from 'semver';
+import { withRetry, isTransientError } from './retry.js';
+
 const BUMP_ORDER = { patch: 0, minor: 1, major: 2 } as const;
 
 /**
- * Bump a semver version string. Handles prerelease versions by stripping
- * the prerelease suffix before bumping (e.g. 1.0.0-beta.1 → 1.0.0 for patch).
+ * Bump a semver version string using the canonical `semver` library. Standard
+ * semver semantics apply: finalizing a prerelease keeps its target version
+ * (1.0.0-beta.1 + patch → 1.0.0, not 1.0.1) and build metadata is handled
+ * correctly.
  */
 export function bumpVersion(version: string, type: 'patch' | 'minor' | 'major'): string {
-  // Strip prerelease suffix (everything after first -)
-  const baseVersion = version.includes('-') ? version.slice(0, version.indexOf('-')) : version;
-  const parts = baseVersion.split('.');
-
-  if (parts.length < 3) {
+  const result = semver.inc(version, type);
+  if (!result) {
     throw new Error(`Invalid version: "${version}" — expected semver format (x.y.z)`);
   }
-
-  const [major, minor, patch] = parts.map(Number);
-
-  if ([major, minor, patch].some(n => Number.isNaN(n))) {
-    throw new Error(`Invalid version: "${version}" — contains non-numeric parts`);
-  }
-
-  switch (type) {
-    case 'major':
-      return `${major + 1}.0.0`;
-    case 'minor':
-      return `${major}.${minor + 1}.0`;
-    case 'patch':
-      return `${major}.${minor}.${patch + 1}`;
-  }
+  return result;
 }
 
 /**
@@ -110,7 +98,10 @@ export async function resolvePreVersion(
       headers.Authorization = `Bearer ${token}`;
     }
 
-    const response = await fetchFn(url, { headers });
+    const response = await withRetry(() => fetchFn(url, { headers }), {
+      label: `registry query ${packageName}`,
+      shouldRetry: isTransientError,
+    });
 
     if (response.status === 404) {
       return `${prefix}0`;

@@ -34,31 +34,43 @@ describe('detectPackageManager', () => {
 });
 
 describe('buildPublishCmd', () => {
+  it('publishes the cwd, not a path argument', () => {
+    expect(buildPublishCmd('npm')).toBe('npm publish');
+  });
+
   it('adds --no-git-checks only for pnpm', () => {
-    expect(buildPublishCmd('pnpm', '/tmp/pkg')).toContain('--no-git-checks');
-    expect(buildPublishCmd('npm', '/tmp/pkg')).not.toContain('--no-git-checks');
-    expect(buildPublishCmd('yarn', '/tmp/pkg')).not.toContain('--no-git-checks');
+    expect(buildPublishCmd('pnpm')).toContain('--no-git-checks');
+    expect(buildPublishCmd('npm')).not.toContain('--no-git-checks');
+    expect(buildPublishCmd('yarn')).not.toContain('--no-git-checks');
   });
 
   it('delegates yarn to the npm CLI', () => {
-    expect(buildPublishCmd('yarn', '/tmp/pkg').startsWith('npm publish')).toBe(true);
-    expect(buildPublishCmd('pnpm', '/tmp/pkg').startsWith('pnpm publish')).toBe(true);
-    expect(buildPublishCmd('npm', '/tmp/pkg').startsWith('npm publish')).toBe(true);
+    expect(buildPublishCmd('yarn').startsWith('npm publish')).toBe(true);
+    expect(buildPublishCmd('pnpm').startsWith('pnpm publish')).toBe(true);
+    expect(buildPublishCmd('npm').startsWith('npm publish')).toBe(true);
   });
 
   it('includes tag and otp when provided', () => {
-    const cmd = buildPublishCmd('npm', '/tmp/pkg', 'beta', '123456');
+    const cmd = buildPublishCmd('npm', { tag: 'beta', otp: '123456' });
     expect(cmd).toContain('--tag beta');
     expect(cmd).toContain('--otp 123456');
   });
 
+  it('adds --access and --provenance when set', () => {
+    const cmd = buildPublishCmd('npm', { access: 'public', provenance: true });
+    expect(cmd).toContain('--access public');
+    expect(cmd).toContain('--provenance');
+  });
+
+  it('rejects unsafe token values', () => {
+    expect(() => buildPublishCmd('npm', { tag: 'beta; rm -rf /' })).toThrow(/Unsafe/);
+  });
+
   it('adds --registry only for non-default registries (ignoring trailing slash)', () => {
-    expect(
-      buildPublishCmd('npm', '/tmp/pkg', undefined, undefined, 'https://registry.npmjs.org/')
-    ).not.toContain('--registry');
-    expect(
-      buildPublishCmd('npm', '/tmp/pkg', undefined, undefined, 'https://npm.internal/')
-    ).toContain('--registry');
+    expect(buildPublishCmd('npm', { registry: 'https://registry.npmjs.org/' })).not.toContain(
+      '--registry'
+    );
+    expect(buildPublishCmd('npm', { registry: 'https://npm.internal/' })).toContain('--registry');
   });
 });
 

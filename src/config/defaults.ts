@@ -5,6 +5,8 @@ export const DEFAULT_CONFIG: Omit<
   'packageManager' | 'publishFiles' | 'stripScripts'
 > = {
   registry: 'https://registry.npmjs.org',
+  access: 'public',
+  provenance: false,
   requireCleanGit: true,
   gitTag: { enabled: true, prefix: '' },
   changelog: { enabled: true, file: 'CHANGELOG.md' },

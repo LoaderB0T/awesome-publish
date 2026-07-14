@@ -81,4 +81,47 @@ describe('modifyPackageJsonStep', () => {
     const result = JSON.parse(readFileSync(join(tempDir, 'package.json'), 'utf-8'));
     expect(result.files).toEqual(['lib']);
   });
+
+  it('resolves workspace: protocol ranges to real versions', async () => {
+    const { tempDir, ctx } = setup({
+      name: 'test',
+      version: '1.0.0',
+      dependencies: { sibling: 'workspace:*', other: 'workspace:^' },
+    });
+    // Add the siblings to the publish set so they can be resolved.
+    ctx.packages.push({
+      name: 'sibling',
+      version: '2.3.4',
+      dir: '/sibling',
+      packageJson: {},
+      config: ctx.config,
+    } as any);
+    ctx.packages.push({
+      name: 'other',
+      version: '0.9.0',
+      dir: '/other',
+      packageJson: {},
+      config: ctx.config,
+    } as any);
+    ctx.versionBumps.set('sibling', {
+      packageName: 'sibling',
+      from: '2.3.4',
+      to: '2.4.0',
+      type: 'minor' as const,
+    });
+
+    await modifyPackageJsonStep.execute(ctx as any);
+    const result = JSON.parse(readFileSync(join(tempDir, 'package.json'), 'utf-8'));
+    expect(result.dependencies.sibling).toBe('2.4.0'); // bumped version, exact
+    expect(result.dependencies.other).toBe('^0.9.0'); // caret + current version
+  });
+
+  it('throws when a workspace dep is not in the publish set', async () => {
+    const { ctx } = setup({
+      name: 'test',
+      version: '1.0.0',
+      dependencies: { missing: 'workspace:*' },
+    });
+    await expect(modifyPackageJsonStep.execute(ctx as any)).rejects.toThrow(/workspace protocol/);
+  });
 });

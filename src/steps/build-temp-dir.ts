@@ -1,6 +1,7 @@
-import { mkdtempSync, cpSync, existsSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { mkdtempSync, cpSync, existsSync, mkdirSync } from 'node:fs';
+import { join, resolve, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
+import { globSync } from 'glob';
 import { Phases } from '../pipeline/phases.js';
 import type { PipelineStep } from '../pipeline/step.js';
 import type { TempDirContext } from '../pipeline/context.js';
@@ -39,15 +40,22 @@ export const buildTempDirStep: PipelineStep<unknown, TempDirContext> = {
       }
 
       for (const entry of pkg.config.publishFiles) {
-        const src = resolve(pkg.dir, entry);
-        if (!existsSync(src)) {
-          console.warn(`⚠ ${pkg.name}: publishFiles entry "${entry}" not found — skipping`);
-          debug('build-temp-dir', `${pkg.name}: skipping missing publishFile "${entry}"`);
+        // publishFiles doubles as npm's `files` field, which accepts globs.
+        // Expand here so glob patterns (e.g. "dist/**/*.js") are actually
+        // copied into the temp dir, not just literal paths.
+        const matches = globSync(entry, { cwd: pkg.dir, dot: true });
+        if (matches.length === 0) {
+          console.warn(`⚠ ${pkg.name}: publishFiles entry "${entry}" matched nothing — skipping`);
+          debug('build-temp-dir', `${pkg.name}: no match for publishFile "${entry}"`);
           continue;
         }
-        const dest = join(tempDir, entry);
-        cpSync(src, dest, { recursive: true });
-        debug('build-temp-dir', `${pkg.name}: copied ${entry}`);
+        for (const match of matches) {
+          const src = resolve(pkg.dir, match);
+          const dest = join(tempDir, match);
+          mkdirSync(dirname(dest), { recursive: true });
+          cpSync(src, dest, { recursive: true });
+        }
+        debug('build-temp-dir', `${pkg.name}: copied ${entry} (${matches.length} match(es))`);
       }
 
       tempDirs.set(pkg.name, tempDir);

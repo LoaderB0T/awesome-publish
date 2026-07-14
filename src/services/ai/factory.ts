@@ -16,10 +16,17 @@ export function createAiProvider(config: ResolvedConfig): AiProvider {
   switch (config.aiProvider.provider) {
     case 'anthropic':
       return new AnthropicProvider(config.aiProvider.model, apiKey);
-    case 'openai-compatible':
-      if (!config.aiProvider.baseUrl) {
+    case 'openai-compatible': {
+      const baseUrl = config.aiProvider.baseUrl;
+      if (!baseUrl) {
         throw new Error('baseUrl is required for openai-compatible provider');
       }
-      return new OpenAiCompatProvider(config.aiProvider.model, apiKey, config.aiProvider.baseUrl);
+      // The API key is sent as a Bearer header — refuse plaintext http to a
+      // non-localhost host so the key can't leak over the wire.
+      if (baseUrl.startsWith('http://') && !/^http:\/\/(localhost|127\.0\.0\.1)/.test(baseUrl)) {
+        throw new Error('aiProvider.baseUrl must use https (http is only allowed for localhost)');
+      }
+      return new OpenAiCompatProvider(config.aiProvider.model, apiKey, baseUrl);
+    }
   }
 }

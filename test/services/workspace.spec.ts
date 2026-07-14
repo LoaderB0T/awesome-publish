@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { resolve, join } from 'node:path';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolvePackages } from '../../src/services/workspace.js';
 import type { ResolvedConfig } from '../../src/types/config.js';
@@ -12,6 +12,8 @@ const defaultConfig: ResolvedConfig = {
   registry: 'https://registry.npmjs.org',
   publishFiles: ['lib'],
   stripScripts: true,
+  access: 'public',
+  provenance: false,
   requireCleanGit: true,
   gitTag: { enabled: false, prefix: '' },
   changelog: { enabled: false, file: 'CHANGELOG.md' },
@@ -77,5 +79,45 @@ describe('resolvePackages', () => {
 
     const result = await resolvePackages(dir, defaultConfig);
     expect(result).toHaveLength(0);
+  });
+
+  it('supports yarn object-form workspaces', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'ap-ws-yarn-'));
+    writeFileSync(
+      join(root, 'package.json'),
+      JSON.stringify({ name: 'root', private: true, workspaces: { packages: ['packages/*'] } })
+    );
+    mkdirSync(join(root, 'packages', 'a'), { recursive: true });
+    writeFileSync(
+      join(root, 'packages', 'a', 'package.json'),
+      JSON.stringify({ name: 'a', version: '1.0.0' })
+    );
+
+    const result = await resolvePackages(root, defaultConfig);
+    expect(result.map(p => p.name)).toEqual(['a']);
+  });
+
+  it('publishes dependencies before dependents (topological order)', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'ap-ws-topo-'));
+    writeFileSync(
+      join(root, 'package.json'),
+      JSON.stringify({ name: 'root', private: true, workspaces: ['packages/*'] })
+    );
+    // "app" (sorts first) depends on "lib" (sorts last) — topo order must still
+    // put lib before app.
+    mkdirSync(join(root, 'packages', 'app'), { recursive: true });
+    writeFileSync(
+      join(root, 'packages', 'app', 'package.json'),
+      JSON.stringify({ name: 'app', version: '1.0.0', dependencies: { lib: '1.0.0' } })
+    );
+    mkdirSync(join(root, 'packages', 'lib'), { recursive: true });
+    writeFileSync(
+      join(root, 'packages', 'lib', 'package.json'),
+      JSON.stringify({ name: 'lib', version: '1.0.0' })
+    );
+
+    const result = await resolvePackages(root, defaultConfig);
+    const names = result.map(p => p.name);
+    expect(names.indexOf('lib')).toBeLessThan(names.indexOf('app'));
   });
 });
