@@ -43,6 +43,10 @@ export const packCommand = defineCommand({
       throw new Error('No packages found to pack');
     }
 
+    const totalPackageCount = args.filter
+      ? (await resolvePackages(rootDir, config)).length
+      : packages.length;
+
     const steps = buildPipeline('pack', config);
     debug(
       'pack',
@@ -53,6 +57,8 @@ export const packCommand = defineCommand({
     const ctx = {
       config,
       packages,
+      totalPackageCount,
+      command: 'pack' as const,
       mode: isCi ? ('ci' as const) : ('interactive' as const),
       dryRun: args['dry-run'] ?? false,
       debug: args.debug ?? false,

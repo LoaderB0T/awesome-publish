@@ -47,7 +47,12 @@ export const gitTagStep: PipelineStep<VersionContext & { rootDir: string }> = {
       const bump = ctx.versionBumps.get(pkg.name);
       if (!bump) continue;
 
-      const tag = buildTagName(pkg.name, bump.to, ctx.packages.length, prefix);
+      const tag = buildTagName(
+        pkg.name,
+        bump.to,
+        ctx.totalPackageCount ?? ctx.packages.length,
+        prefix
+      );
       // Skip tags that already exist rather than aborting an otherwise-successful
       // publish (e.g. a re-run after the npm publish succeeded but tagging failed).
       if (await git.tagExists(tag)) {

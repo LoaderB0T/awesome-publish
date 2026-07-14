@@ -1,7 +1,23 @@
 import { describe, it, expect, vi } from 'vitest';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { execFileSync } from 'node:child_process';
 import { determineVersionStep } from '../../src/steps/determine-version.js';
 import type { CoreContext, ChangesetContext } from '../../src/pipeline/context.js';
 import type { ResolvedConfig } from '../../src/types/config.js';
+
+/** A temp git repo whose single commit has the given message, no tags. */
+function repoWithCommit(message: string): string {
+  const dir = mkdtempSync(join(tmpdir(), 'ap-dv-'));
+  execFileSync('git', ['init'], { cwd: dir });
+  execFileSync('git', ['config', 'user.email', 'test@test.com'], { cwd: dir });
+  execFileSync('git', ['config', 'user.name', 'Test'], { cwd: dir });
+  writeFileSync(join(dir, 'f.txt'), 'x');
+  execFileSync('git', ['add', '.'], { cwd: dir });
+  execFileSync('git', ['commit', '-m', message], { cwd: dir });
+  return dir;
+}
 
 function makeCtx(overrides: Record<string, unknown> = {}): CoreContext & Partial<ChangesetContext> {
   return {
@@ -172,6 +188,34 @@ describe('determineVersionStep', () => {
     ctx.config.changesets = { enabled: true, enforceInPR: false };
     const result = await determineVersionStep.execute(ctx as any);
     expect(result.versionBumps.get('pkg-a')?.to).toBe('0.4.0');
+  });
+
+  it('conventional-commits in CI with no releasable commit is a clean no-op, not an error (H2)', async () => {
+    const rootDir = repoWithCommit('chore: tidy up');
+    const ctx = makeCtx({ rootDir });
+    ctx.config.conventionalCommits = true;
+    // Must NOT throw the "CI mode requires ..." error — a chore-only cycle is a
+    // valid green no-op.
+    const result = await determineVersionStep.execute(ctx as any);
+    expect(result.versionBumps.size).toBe(0);
+  });
+
+  it('falls through to conventional commits in CI when changesets enabled but none present (H2)', async () => {
+    const rootDir = repoWithCommit('feat: add a thing');
+    const ctx = makeCtx({ rootDir });
+    // Both strategies configured; no changeset files this run. The empty-changeset
+    // early-return must NOT swallow the real feat: commit.
+    ctx.config.changesets = { enabled: true, enforceInPR: false };
+    ctx.config.conventionalCommits = true;
+    const result = await determineVersionStep.execute(ctx as any);
+    expect(result.versionBumps.get('pkg-a')?.to).toBe('1.1.0');
+  });
+
+  it('still errors in CI when NO versioning strategy is configured at all', async () => {
+    const rootDir = repoWithCommit('feat: whatever');
+    const ctx = makeCtx({ rootDir });
+    // changesets disabled, conventionalCommits false, no --bump → misconfiguration.
+    await expect(determineVersionStep.execute(ctx as any)).rejects.toThrow(/CI mode requires/i);
   });
 
   it('handles already-prerelease version without double-bumping', async () => {

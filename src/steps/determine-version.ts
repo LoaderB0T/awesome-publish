@@ -111,15 +111,18 @@ export const determineVersionStep: PipelineStep<
     const rawBumpArg = (ctx as any).cliArgs?.bump as string | undefined;
     if (
       ctx.config.changesets.enabled &&
+      !ctx.config.conventionalCommits &&
       !changesets?.length &&
       ctx.mode === 'ci' &&
       !preId &&
       !rawBumpArg
     ) {
-      // No changesets on this run — nothing to release. Return empty bumps so
-      // the pipeline is a clean no-op (publish/tag/release steps all skip) and
-      // CI stays green on ordinary commits instead of failing every push. Skip
-      // the git tag lookups below — there's nothing to compute notes for.
+      // No changesets on this run and no conventional-commits fallback — nothing
+      // to release. Return empty bumps so the pipeline is a clean no-op
+      // (publish/tag/release steps all skip) and CI stays green on ordinary
+      // commits instead of failing every push. When conventionalCommits is ALSO
+      // enabled we must fall through so real feat:/fix: commits still ship — the
+      // conventional-commits branch below handles the empty-changeset case.
       console.log('No changesets found — nothing to release.');
       return { versionBumps: bumps, isPrerelease: false, previousTags: new Map() };
     }
@@ -136,7 +139,11 @@ export const determineVersionStep: PipelineStep<
       previousTags.set(
         pkg.name,
         await git.getLatestTag(
-          tagMatchPrefix(pkg.name, ctx.packages.length, ctx.config.gitTag.prefix)
+          tagMatchPrefix(
+            pkg.name,
+            ctx.totalPackageCount ?? ctx.packages.length,
+            ctx.config.gitTag.prefix
+          )
         )
       );
     }
@@ -251,9 +258,18 @@ export const determineVersionStep: PipelineStep<
         return finalize(bumps);
       }
       debug('determine-version', 'no conventional commits matched bump types');
+
+      // conventionalCommits is configured but no fix/feat/breaking commit landed
+      // since the last release — a routine chore-only cycle. In CI this must be a
+      // clean no-op (green build), NOT a hard error, matching the documented
+      // behavior and the changesets no-op path above.
+      if (ctx.mode === 'ci') {
+        console.log('No releasable commits since the last release — nothing to release.');
+        return finalize(bumps);
+      }
     }
 
-    // 4. CI mode without anything = error
+    // 4. CI mode with NO versioning strategy configured at all = misconfiguration.
     if (ctx.mode === 'ci') {
       throw new Error(
         'CI mode requires --bump=patch|minor|major, changesets, or conventional commits'

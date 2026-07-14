@@ -54,6 +54,13 @@ export const publishCommand = defineCommand({
       throw new Error('No packages found to publish');
     }
 
+    // Total workspace package count, independent of --filter, so tag naming and
+    // commit scoping stay correct on a filtered monorepo release. Only pay the
+    // second resolve when a filter is actually narrowing the set.
+    const totalPackageCount = args.filter
+      ? (await resolvePackages(rootDir, config)).length
+      : packages.length;
+
     const steps = buildPipeline('publish', config);
     debug(
       'publish',
@@ -64,6 +71,8 @@ export const publishCommand = defineCommand({
     const ctx = {
       config,
       packages,
+      totalPackageCount,
+      command: 'publish' as const,
       mode: isCi ? ('ci' as const) : ('interactive' as const),
       dryRun,
       debug: args.debug ?? false,

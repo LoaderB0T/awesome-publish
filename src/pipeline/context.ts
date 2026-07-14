@@ -5,6 +5,16 @@ import type { Changeset } from '../types/changeset.js';
 export interface CoreContext {
   config: ResolvedConfig;
   packages: PackageInfo[];
+  /**
+   * Total publishable packages in the workspace, BEFORE any `--filter` is
+   * applied. Monorepo-vs-single-package decisions (tag naming, commit scoping,
+   * changelog format) must key off this, not `packages.length` — a filtered
+   * single-package run of a monorepo must still use `pkg@1.2.3` tags and
+   * dir-scoped commit ranges. Falls back to `packages.length` when unset.
+   */
+  totalPackageCount?: number;
+  /** Which CLI command is driving the pipeline. */
+  command?: 'publish' | 'pack' | 'version';
   mode: 'interactive' | 'ci';
   dryRun: boolean;
   debug: boolean;

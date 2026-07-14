@@ -104,7 +104,7 @@ export const writeChangelogStep: PipelineStep<
   async execute(ctx): Promise<ChangelogContext> {
     const git = new GitService(ctx.rootDir);
     const changesets: Changeset[] | undefined = (ctx as any).changesets;
-    const isMultiPackage = ctx.packages.length > 1;
+    const isMultiPackage = (ctx.totalPackageCount ?? ctx.packages.length) > 1;
     const changelogEntries = new Map<string, string>();
 
     for (const pkg of ctx.packages) {

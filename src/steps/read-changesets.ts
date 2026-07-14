@@ -36,9 +36,20 @@ export function parseChangesetFile(filePath: string): Changeset | null {
   const releases: Changeset['releases'] = [];
 
   for (const line of frontmatter.split('\n')) {
+    if (!line.trim()) continue; // blank frontmatter line — ignore silently
     const lineMatch = line.match(/^"(.+)":\s*(patch|minor|major)\s*$/);
     if (lineMatch) {
       releases.push({ name: lineMatch[1], type: lineMatch[2] as 'patch' | 'minor' | 'major' });
+    } else {
+      // A non-blank line that isn't a valid `"pkg": patch|minor|major` — likely a
+      // typo (`"pkg": pathc`) or unquoted name. Warn PER LINE: a sibling valid
+      // line makes releases.length > 0, so the whole-file warning below never
+      // fires and this release intent would otherwise vanish when the changeset
+      // file is deleted after a successful publish.
+      console.warn(
+        `⚠ Changeset ${basename(filePath)}: ignoring invalid frontmatter line "${line.trim()}" ` +
+          `(expected \`"package-name": patch|minor|major\`).`
+      );
     }
   }
 

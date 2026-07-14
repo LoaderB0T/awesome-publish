@@ -51,6 +51,12 @@ jobs:
 ${permissions}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history + tags: the pipeline diffs commits since the last tag
+          # for changelogs/release notes and reads existing tags for version
+          # resolution. The default shallow (depth 1, no tags) checkout would
+          # make every release look like a first release.
+          fetch-depth: 0
 ${pnpmSetup}      - uses: actions/setup-node@v4
         with:
           node-version: 22

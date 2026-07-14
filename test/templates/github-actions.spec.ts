@@ -28,6 +28,12 @@ describe('generatePublishWorkflow', () => {
     expect(yml).not.toContain('run build');
   });
 
+  it('checks out full history + tags so version/changelog resolution works (C2)', () => {
+    // A shallow checkout (the default) has no tags and depth 1, making every
+    // release look like a first release.
+    expect(generatePublishWorkflow('npm')).toContain('fetch-depth: 0');
+  });
+
   it('adds id-token permission only with provenance', () => {
     expect(generatePublishWorkflow('npm', { provenance: true })).toContain('id-token: write');
     expect(generatePublishWorkflow('npm')).not.toContain('id-token: write');

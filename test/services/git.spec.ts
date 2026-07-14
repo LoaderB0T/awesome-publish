@@ -61,6 +61,22 @@ describe('GitService', () => {
     expect(await git.tagExists('v1.0.0')).toBe(true);
   });
 
+  it('commitAll succeeds even when the repo has no git identity configured (CI runner)', async () => {
+    // A fresh GitHub Actions checkout has no user.name/user.email; a bare
+    // `git commit` would abort with "Please tell me who you are" AFTER npm
+    // publish. commitAll must inject a fallback identity so the release commit
+    // still lands.
+    const bare = mkdtempSync(join(tmpdir(), 'awesome-publish-noid-'));
+    execFileSync('git', ['init'], { cwd: bare });
+    // Force an empty local identity so a global config can't mask the bug.
+    execFileSync('git', ['config', 'user.email', ''], { cwd: bare });
+    execFileSync('git', ['config', 'user.name', ''], { cwd: bare });
+    writeFileSync(join(bare, 'file.txt'), 'x');
+    const noIdGit = new GitService(bare);
+    await noIdGit.commitAll('chore: release v1.0.0');
+    expect(await noIdGit.isWorkingTreeClean()).toBe(true);
+  });
+
   it('commitAll stages and commits, leaving a clean tree', async () => {
     writeFileSync(join(dir, 'pkg.txt'), 'bumped');
     await git.commitAll('chore: release v1.2.3');

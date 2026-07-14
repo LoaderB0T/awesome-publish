@@ -29,7 +29,13 @@ export const runBuildStep: PipelineStep<VersionContext & { rootDir: string }> = 
   async execute(ctx): Promise<void> {
     const cmd = ctx.config.buildCommand!;
     debug('run-build', `running build command: ${cmd}`);
-    const { stdout, stderr } = await execAsync(cmd, { cwd: (ctx as any).rootDir });
+    // Verbose bundlers (webpack/vite/rollup) easily exceed the 1MB default
+    // stdout buffer; a real build's output must not abort the release with a
+    // cryptic "maxBuffer exceeded". Match the generous ceiling used in git.ts.
+    const { stdout, stderr } = await execAsync(cmd, {
+      cwd: (ctx as any).rootDir,
+      maxBuffer: 256 * 1024 * 1024,
+    });
     debug('run-build', 'build stdout', stdout.trim());
     if (stderr.trim()) debug('run-build', 'build stderr', stderr.trim());
   },

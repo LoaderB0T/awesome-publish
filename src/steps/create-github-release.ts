@@ -55,14 +55,19 @@ export const createGithubReleaseStep: PipelineStep<
       debug('github-release', `created combined release id=${id}`);
       releaseIds.set('combined', id);
     } else {
-      const isMultiPackage = ctx.packages.length > 1;
+      const isMultiPackage = (ctx.totalPackageCount ?? ctx.packages.length) > 1;
       // Pin releases to the release commit; with gitTag disabled the tag doesn't
       // exist yet, so without this GitHub would tag the default branch's HEAD.
       const target = await git.getHeadSha();
       for (const pkg of ctx.packages) {
         const bump = ctx.versionBumps.get(pkg.name);
         if (!bump) continue;
-        const tag = buildTagName(pkg.name, bump.to, ctx.packages.length, ctx.config.gitTag.prefix);
+        const tag = buildTagName(
+          pkg.name,
+          bump.to,
+          ctx.totalPackageCount ?? ctx.packages.length,
+          ctx.config.gitTag.prefix
+        );
         debug('github-release', `creating release for ${pkg.name}: ${tag}`);
         // Use the tag captured before git-tag created this release's tag —
         // querying git here would return the just-created tag and produce an

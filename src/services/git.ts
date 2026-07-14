@@ -93,7 +93,16 @@ export class GitService {
    */
   public async commitAll(message: string): Promise<void> {
     await this.exec('git', ['add', '-A']);
-    await this.exec('git', ['commit', '-m', message]);
+    // On a fresh CI runner (e.g. GitHub Actions) no git identity is configured,
+    // so a bare `git commit` aborts with "Please tell me who you are" — and that
+    // happens AFTER npm publish has already run, leaving the release half-done.
+    // Inject a bot identity via `-c` for whichever of name/email is missing, so
+    // the release commit always succeeds. A configured value always wins.
+    const args = ['commit', '-m', message];
+    const [name, email] = await Promise.all([this.getUserName(), this.getUserEmail()]);
+    if (!email) args.unshift('-c', 'user.email=awesome-publish@users.noreply.github.com');
+    if (!name) args.unshift('-c', 'user.name=awesome-publish');
+    await this.exec('git', args);
   }
 
   public async getHeadSha(): Promise<string | null> {
@@ -121,14 +130,20 @@ export class GitService {
     // on an upstream + push.default, which is absent on a detached HEAD (the
     // default state after actions/checkout in CI) and fails there.
     const branch = await this.getCurrentBranch();
+    // Detached HEAD is the DEFAULT state after actions/checkout on a push event,
+    // so getCurrentBranch() is null in exactly the tool's own generated CI. A
+    // bare `git push` has no upstream there and fails *after* npm publish already
+    // ran. Fall back to the CI-provided branch name (GITHUB_REF_NAME is the
+    // pushed branch on push events) and push an explicit refspec.
+    const targetBranch = branch ?? process.env.GITHUB_REF_NAME ?? null;
     // Retry transient network failures — a blip here aborts the run *after* the
     // npm publish already succeeded, which is the worst place to give up.
     await withRetry(
       () =>
-        branch
-          ? this.exec('git', ['push', 'origin', `HEAD:${branch}`])
-          : // Detached HEAD: fall back to a bare push so the underlying git error
-            // is surfaced to the user rather than us guessing a branch name.
+        targetBranch
+          ? this.exec('git', ['push', 'origin', `HEAD:refs/heads/${targetBranch}`])
+          : // Truly detached with no CI hint: bare push so git's own error
+            // surfaces rather than us guessing a branch name.
             this.exec('git', ['push']),
       { label: 'git push', shouldRetry: isTransientError }
     );

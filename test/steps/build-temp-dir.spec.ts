@@ -112,4 +112,47 @@ describe('buildTempDirStep', () => {
 
     await expect(buildTempDirStep.execute(ctx as any)).rejects.toThrow(/empty|matched/i);
   });
+
+  it('throws on an empty match under `pack` even with no version bump (C5)', async () => {
+    const pkgDir = mkdtempSync(join(tmpdir(), 'ap-build-pack-empty-'));
+    writeFileSync(
+      join(pkgDir, 'package.json'),
+      JSON.stringify({ name: 'empty', version: '1.0.0' })
+    );
+    const config = { publishFiles: ['dist'] } as ResolvedConfig;
+
+    // No versionBumps for this package, but `pack` packs every resolved package
+    // regardless of bump — an empty match must still fail loudly rather than
+    // emit a tarball containing only package.json.
+    const ctx = {
+      config,
+      packages: [{ name: 'empty', version: '1.0.0', dir: pkgDir, packageJson: {}, config }],
+      versionBumps: new Map(),
+      command: 'pack' as const,
+      mode: 'ci' as const,
+      dryRun: false,
+    };
+
+    await expect(buildTempDirStep.execute(ctx as any)).rejects.toThrow(/empty|matched/i);
+  });
+
+  it('does NOT throw on an empty match for a no-bump sibling under `publish`', async () => {
+    const pkgDir = mkdtempSync(join(tmpdir(), 'ap-build-nobump-'));
+    writeFileSync(join(pkgDir, 'package.json'), JSON.stringify({ name: 'sib', version: '1.0.0' }));
+    const config = { publishFiles: ['dist'] } as ResolvedConfig;
+
+    // publish-npm skips a no-bump sibling, so an empty match for it is harmless.
+    const ctx = {
+      config,
+      packages: [{ name: 'sib', version: '1.0.0', dir: pkgDir, packageJson: {}, config }],
+      versionBumps: new Map(),
+      command: 'publish' as const,
+      mode: 'ci' as const,
+      dryRun: false,
+    };
+
+    const result = await buildTempDirStep.execute(ctx as any);
+    createdDirs.push(result.tempDirs.get('sib')!);
+    expect(result.tempDirs.has('sib')).toBe(true);
+  });
 });

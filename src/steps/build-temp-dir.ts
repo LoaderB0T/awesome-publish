@@ -81,11 +81,15 @@ export const buildTempDirStep: PipelineStep<unknown, TempDirContext> = {
 
       // If a package we're about to publish/pack matched NO publishFiles, the
       // tarball would contain only package.json — an empty, broken package that
-      // burns the version on npm irreversibly. Fail before publish. (Only for
-      // packages with a version bump; a no-bump monorepo sibling is skipped by
-      // publish-npm anyway.)
+      // burns the version on npm irreversibly. Fail before publish. Applies to
+      // any package that will actually be published (has a bump), OR any package
+      // at all under `pack` — pack-local.ts packs every resolved package
+      // regardless of bump, so a no-bump sibling would silently emit a broken
+      // tarball. (Under publish, a no-bump monorepo sibling is skipped by
+      // publish-npm anyway, so an empty match for it is harmless.)
       const willPublish = (ctx as any).versionBumps?.get?.(pkg.name);
-      if (totalMatched === 0 && willPublish) {
+      const isPack = (ctx as any).command === 'pack';
+      if (totalMatched === 0 && (willPublish || isPack)) {
         throw new Error(
           `${pkg.name}: none of publishFiles [${pkg.config.publishFiles.join(', ')}] matched any files in ${pkg.dir}. ` +
             `The package would be published empty. Check your build output and publishFiles (did the build run? correct directory?).`

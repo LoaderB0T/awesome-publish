@@ -1,6 +1,8 @@
-import { describe, it, expect } from 'vitest';
-import { resolve } from 'node:path';
-import { readChangesetsStep } from '../../src/steps/read-changesets.js';
+import { describe, it, expect, vi } from 'vitest';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
+import { readChangesetsStep, parseChangesetFile } from '../../src/steps/read-changesets.js';
 import type { ResolvedConfig } from '../../src/types/config.js';
 
 const fixtureDir = resolve(import.meta.dirname, '../fixtures/changesets');
@@ -55,5 +57,22 @@ describe('readChangesetsStep', () => {
 
     const result = await readChangesetsStep.execute(ctx as any);
     expect(result.changesets).toEqual([]);
+  });
+
+  it('warns about (but does not silently drop) a malformed frontmatter line beside a valid one (H1)', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'ap-cs-'));
+    const file = join(dir, 'typo.md');
+    // pkg-a is valid; pkg-b has a typo'd bump type — without a per-line warning
+    // this loss would be invisible (the file still parses via the valid line and
+    // is deleted after publish).
+    writeFileSync(file, '---\n"pkg-a": patch\n"pkg-b": pathc\n---\nfix both\n');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const parsed = parseChangesetFile(file);
+      expect(parsed?.releases).toEqual([{ name: 'pkg-a', type: 'patch' }]);
+      expect(warn).toHaveBeenCalledWith(expect.stringMatching(/pkg-b.*pathc|invalid frontmatter/i));
+    } finally {
+      warn.mockRestore();
+    }
   });
 });
