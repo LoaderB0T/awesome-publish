@@ -44,6 +44,24 @@ describe('publishNpmStep', () => {
     expect(err?.message).toMatch(/Failed to publish/);
   });
 
+  it('surfaces npm stderr (not just "Command failed") so failures are diagnosable', async () => {
+    // Node's exec error carries the real reason in .stderr; .message is generic.
+    publishMock.mockImplementation(async () => {
+      const err: any = new Error('Command failed: npm publish');
+      err.stderr = 'npm error code EOTP\nnpm error This operation requires a one-time password.';
+      throw err;
+    });
+    let err: Error | undefined;
+    try {
+      await publishNpmStep.execute(makeCtx());
+    } catch (e) {
+      err = e as Error;
+    }
+    expect(err?.message).toMatch(/EOTP|one-time password/);
+    // And the actionable OTP hint is appended.
+    expect(err?.message).toMatch(/--otp <code>/);
+  });
+
   it('treats a version-conflict as skipped, not a failure', async () => {
     publishMock.mockImplementation(async () => {
       throw new Error('403 Forbidden: cannot publish over the previously published version');

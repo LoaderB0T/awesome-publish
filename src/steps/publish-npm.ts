@@ -22,6 +22,13 @@ function isAuthError(msg: string): boolean {
   );
 }
 
+// npm's 2FA one-time-password errors. Distinct from a plain 401 (not logged in)
+// — the user IS authenticated but the OTP is missing/wrong/expired, so the hint
+// is different: send a fresh code, don't re-login.
+function isOtpError(msg: string): boolean {
+  return /EOTP/i.test(msg) || /one[- ]time pass(?:word)?/i.test(msg) || /otp/i.test(msg);
+}
+
 function isVersionConflict(msg: string): boolean {
   return (
     // "409" or npm's "E409" code, but not an unrelated "1409"/port so a real
@@ -109,7 +116,12 @@ export const publishNpmStep: PipelineStep<TempDirContext & VersionContext, Publi
           status: 'published',
         });
       } catch (error: any) {
-        const msg = error?.message ?? String(error);
+        // Node's exec error `.message` is only "Command failed: <cmd>" — the
+        // actual npm/pnpm reason (EOTP, E402, 403, network) lives in stderr.
+        // Fold it in or the failure is undiagnosable. The adapter already
+        // redacted secrets in both message and stderr.
+        const stderr = error?.stderr ? String(error.stderr).trim() : '';
+        const msg = [error?.message ?? String(error), stderr].filter(Boolean).join('\n');
         debug('publish-npm', `${pkg.name} publish error`, msg);
         if (isVersionConflict(msg)) {
           debug('publish-npm', `${pkg.name}@${version} already exists, skipping`);
@@ -123,7 +135,9 @@ export const publishNpmStep: PipelineStep<TempDirContext & VersionContext, Publi
           // C2: Record per-package failure instead of aborting entire publish
           const error = isAuthError(msg)
             ? `${msg}\n    → npm authentication required. Run \`npm login\`, or set up an .npmrc with a token (in CI: NODE_AUTH_TOKEN via actions/setup-node).`
-            : msg;
+            : isOtpError(msg)
+              ? `${msg}\n    → npm needs a valid 2FA one-time password. Re-run with a fresh code via \`--otp <code>\` (codes expire in ~30s).`
+              : msg;
           results.set(pkg.name, {
             packageName: pkg.name,
             version,
