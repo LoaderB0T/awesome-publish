@@ -121,7 +121,13 @@ describe('extractPreIdentifier', () => {
 describe('resolvePreVersion', () => {
   it('returns .0 when package not found (404)', async () => {
     const mockFetch = vi.fn().mockResolvedValue({ status: 404, ok: false });
-    const result = await resolvePreVersion('my-pkg', '1.1.0', 'beta', 'https://registry.npmjs.org', mockFetch as any);
+    const result = await resolvePreVersion(
+      'my-pkg',
+      '1.1.0',
+      'beta',
+      'https://registry.npmjs.org',
+      mockFetch as any
+    );
     expect(result).toBe('1.1.0-beta.0');
   });
 
@@ -138,7 +144,13 @@ describe('resolvePreVersion', () => {
         },
       }),
     });
-    const result = await resolvePreVersion('my-pkg', '1.1.0', 'beta', 'https://registry.npmjs.org', mockFetch as any);
+    const result = await resolvePreVersion(
+      'my-pkg',
+      '1.1.0',
+      'beta',
+      'https://registry.npmjs.org',
+      mockFetch as any
+    );
     expect(result).toBe('1.1.0-beta.3');
   });
 
@@ -150,19 +162,27 @@ describe('resolvePreVersion', () => {
         versions: { '1.0.0': {}, '1.1.0-alpha.0': {} },
       }),
     });
-    const result = await resolvePreVersion('my-pkg', '1.1.0', 'beta', 'https://registry.npmjs.org', mockFetch as any);
+    const result = await resolvePreVersion(
+      'my-pkg',
+      '1.1.0',
+      'beta',
+      'https://registry.npmjs.org',
+      mockFetch as any
+    );
     expect(result).toBe('1.1.0-beta.0');
   });
 
   it('throws on 401/403 with helpful message', async () => {
     const mockFetch = vi.fn().mockResolvedValue({ status: 401, ok: false });
-    await expect(resolvePreVersion('my-pkg', '1.1.0', 'beta', 'https://registry.npmjs.org', mockFetch as any))
-      .rejects.toThrow(/NPM_TOKEN/);
+    await expect(
+      resolvePreVersion('my-pkg', '1.1.0', 'beta', 'https://registry.npmjs.org', mockFetch as any)
+    ).rejects.toThrow(/NPM_TOKEN/);
   });
 
   it('throws on network error with context', async () => {
     const mockFetch = vi.fn().mockRejectedValue(new Error('ECONNREFUSED'));
-    await expect(resolvePreVersion('my-pkg', '1.1.0', 'beta', 'https://registry.npmjs.org', mockFetch as any))
-      .rejects.toThrow(/Failed to query registry/);
+    await expect(
+      resolvePreVersion('my-pkg', '1.1.0', 'beta', 'https://registry.npmjs.org', mockFetch as any)
+    ).rejects.toThrow(/Failed to query registry/);
   });
 });

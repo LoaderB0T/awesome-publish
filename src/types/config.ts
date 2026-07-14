@@ -4,14 +4,18 @@ export interface AwesomePublishConfig {
   publishFiles: string[];
   stripScripts: boolean | string[];
   requireCleanGit?: boolean;
-  gitTag?: boolean | {
-    enabled: boolean;
-    prefix?: string;
-  };
-  changelog?: boolean | {
-    enabled: boolean;
-    file?: string;
-  };
+  gitTag?:
+    | boolean
+    | {
+        enabled: boolean;
+        prefix?: string;
+      };
+  changelog?:
+    | boolean
+    | {
+        enabled: boolean;
+        file?: string;
+      };
   conventionalCommits?: boolean;
   confirmPublish?: boolean;
   syncDependencies?: boolean;
@@ -31,10 +35,12 @@ export interface AwesomePublishConfig {
     model: string;
     baseUrl?: string;
   };
-  aiReleaseNotes?: boolean | {
-    enabled: boolean;
-    customPromptFile?: string;
-  };
+  aiReleaseNotes?:
+    | boolean
+    | {
+        enabled: boolean;
+        customPromptFile?: string;
+      };
 }
 
 export interface ResolvedConfig {

@@ -19,7 +19,7 @@ export const buildTempDirStep: PipelineStep<unknown, TempDirContext> = {
 
     for (const pkg of ctx.packages) {
       const tempDir = mkdtempSync(
-        join(tmpdir(), `awesome-publish-${pkg.name.replace(/[/@]/g, '-')}-`),
+        join(tmpdir(), `awesome-publish-${pkg.name.replace(/[/@]/g, '-')}-`)
       );
       debug('build-temp-dir', `${pkg.name} → ${tempDir}`);
 

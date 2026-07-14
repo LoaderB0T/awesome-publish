@@ -1,7 +1,25 @@
 {
   "typescript.tsdk": "node_modules\\typescript\\lib",
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll": "explicit"
+  },
+  "editor.defaultFormatter": "oxc.oxc-vscode",
+  "[typescript]": {
+    "editor.defaultFormatter": "oxc.oxc-vscode"
+  },
+  "[javascript]": {
+    "editor.defaultFormatter": "oxc.oxc-vscode"
+  },
+  "[json]": {
+    "editor.defaultFormatter": "oxc.oxc-vscode"
+  },
+  "[jsonc]": {
+    "editor.defaultFormatter": "oxc.oxc-vscode"
+  },
   "explorer.fileNesting.enabled": true,
   "explorer.fileNesting.patterns": {
-    ".gitignore": ".npmignore"
+    "package.json": ".oxlintrc.json, .oxfmtrc.json, .editorconfig, .npm*, pnpm-lock.yaml, pnpm-workspace.yaml, tsconfig*, vitest.config.ts",
+    "*.ts": "$(capture).spec.ts, $(capture).test.ts, $(capture).d.ts, $(capture).js, $(capture).js.map"
   }
 }

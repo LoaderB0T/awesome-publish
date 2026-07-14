@@ -16,7 +16,10 @@ export const publishCommand = defineCommand({
     ...sharedArgs,
     bump: { type: 'string', description: 'Version bump type (patch|minor|major)' },
     tag: { type: 'string', description: 'npm dist-tag (e.g., next, beta)' },
-    pre: { type: 'string', description: 'Publish as prerelease (e.g. --pre beta, --pre alpha, --pre rc)' },
+    pre: {
+      type: 'string',
+      description: 'Publish as prerelease (e.g. --pre beta, --pre alpha, --pre rc)',
+    },
   },
   async run({ args }) {
     if (args.debug) setDebug(true);
@@ -33,7 +36,9 @@ export const publishCommand = defineCommand({
     debug('publish', 'package manager', pm);
 
     const rawConfig = await loadConfigFromDir(rootDir);
-    const config = rawConfig ? validateConfig(rawConfig, pm) : validateConfig({ publishFiles: ['lib'], stripScripts: true }, pm);
+    const config = rawConfig
+      ? validateConfig(rawConfig, pm)
+      : validateConfig({ publishFiles: ['lib'], stripScripts: true }, pm);
     debug('publish', 'resolved config', config);
 
     if (config.requireCleanGit && !args['ignore-git']) {
@@ -42,31 +47,46 @@ export const publishCommand = defineCommand({
         const clean = await git.isWorkingTreeClean();
         debug('publish', 'git clean', clean);
         if (!clean) {
-          throw new Error('Working tree is not clean. Commit or stash changes, or use --ignore-git');
+          throw new Error(
+            'Working tree is not clean. Commit or stash changes, or use --ignore-git'
+          );
         }
       } catch (error: any) {
         // I4: Friendly error when not in a git repo
-        if (error?.message?.includes('not a git repository') || error?.stderr?.includes('not a git repository')) {
-          throw new Error('Not a git repository. Run "git init" first, or use --ignore-git to skip git checks');
+        if (
+          error?.message?.includes('not a git repository') ||
+          error?.stderr?.includes('not a git repository')
+        ) {
+          throw new Error(
+            'Not a git repository. Run "git init" first, or use --ignore-git to skip git checks'
+          );
         }
         throw error;
       }
     }
 
     const packages = await resolvePackages(rootDir, config, args.filter);
-    debug('publish', 'resolved packages', packages.map(p => `${p.name}@${p.version}`));
+    debug(
+      'publish',
+      'resolved packages',
+      packages.map(p => `${p.name}@${p.version}`)
+    );
 
     if (packages.length === 0) {
       throw new Error('No packages found to publish');
     }
 
     const steps = buildPipeline('publish', config);
-    debug('publish', 'pipeline steps', steps.map(s => s.name));
+    debug(
+      'publish',
+      'pipeline steps',
+      steps.map(s => s.name)
+    );
 
     const ctx = {
       config,
       packages,
-      mode: isCi ? 'ci' as const : 'interactive' as const,
+      mode: isCi ? ('ci' as const) : ('interactive' as const),
       dryRun,
       debug: args.debug ?? false,
       rootDir,

@@ -2,7 +2,11 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { detectPackageManager, buildPublishCmd, buildPackCmd } from '../../src/services/package-manager.js';
+import {
+  detectPackageManager,
+  buildPublishCmd,
+  buildPackCmd,
+} from '../../src/services/package-manager.js';
 
 describe('detectPackageManager', () => {
   it('detects pnpm from pnpm-lock.yaml', () => {
@@ -49,8 +53,12 @@ describe('buildPublishCmd', () => {
   });
 
   it('adds --registry only for non-default registries (ignoring trailing slash)', () => {
-    expect(buildPublishCmd('npm', '/tmp/pkg', undefined, undefined, 'https://registry.npmjs.org/')).not.toContain('--registry');
-    expect(buildPublishCmd('npm', '/tmp/pkg', undefined, undefined, 'https://npm.internal/')).toContain('--registry');
+    expect(
+      buildPublishCmd('npm', '/tmp/pkg', undefined, undefined, 'https://registry.npmjs.org/')
+    ).not.toContain('--registry');
+    expect(
+      buildPublishCmd('npm', '/tmp/pkg', undefined, undefined, 'https://npm.internal/')
+    ).toContain('--registry');
   });
 });
 

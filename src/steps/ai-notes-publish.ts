@@ -4,14 +4,17 @@ import type { AiNotesContext, GithubReleaseContext } from '../pipeline/context.j
 import { GitHubService } from '../services/github.js';
 import { debug } from '../services/debug.js';
 
-export const aiNotesPublishStep: PipelineStep<AiNotesContext & GithubReleaseContext & { rootDir: string }> = {
+export const aiNotesPublishStep: PipelineStep<
+  AiNotesContext & GithubReleaseContext & { rootDir: string }
+> = {
   name: 'ai-notes-publish',
   phase: Phases.AI_NOTES_PUBLISH,
   after: [Phases.GITHUB_RELEASE],
   before: [Phases.CLEANUP],
   hasSideEffects: true,
 
-  shouldRun: (ctx) => ctx.config.github.releases.enabled && ctx.releaseNotes?.size > 0 && ctx.releaseIds?.size > 0,
+  shouldRun: ctx =>
+    ctx.config.github.releases.enabled && ctx.releaseNotes?.size > 0 && ctx.releaseIds?.size > 0,
 
   async execute(ctx): Promise<void> {
     const token = process.env.GITHUB_TOKEN;
@@ -37,13 +40,19 @@ export const aiNotesPublishStep: PipelineStep<AiNotesContext & GithubReleaseCont
       const allNotes = Array.from(ctx.releaseNotes.entries())
         .map(([name, notes]) => `## ${name}\n\n${notes}`)
         .join('\n\n---\n\n');
-      debug('ai-notes-publish', `updating combined release id=${releaseId} (${allNotes.length} chars)`);
+      debug(
+        'ai-notes-publish',
+        `updating combined release id=${releaseId} (${allNotes.length} chars)`
+      );
       await github.updateRelease(releaseId, allNotes);
     } else {
       for (const [name, notes] of ctx.releaseNotes) {
         const releaseId = ctx.releaseIds.get(name);
         if (releaseId) {
-          debug('ai-notes-publish', `updating ${name} release id=${releaseId} (${notes.length} chars)`);
+          debug(
+            'ai-notes-publish',
+            `updating ${name} release id=${releaseId} (${notes.length} chars)`
+          );
           await github.updateRelease(releaseId, notes);
         }
       }

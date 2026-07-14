@@ -12,8 +12,10 @@ describe('gitCommitStep', () => {
 
   it('shouldRun only when there are version bumps', () => {
     expect(gitCommitStep.shouldRun({ versionBumps: new Map() } as any)).toBe(false);
-    expect(gitCommitStep.shouldRun({
-      versionBumps: new Map([['a', { to: '1.0.1' }]]),
-    } as any)).toBe(true);
+    expect(
+      gitCommitStep.shouldRun({
+        versionBumps: new Map([['a', { to: '1.0.1' }]]),
+      } as any)
+    ).toBe(true);
   });
 });

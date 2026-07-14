@@ -5,7 +5,9 @@ import type { ResolvedConfig } from '../../../src/types/config.js';
 describe('createAiProvider', () => {
   const origEnv = process.env.AWESOME_PUBLISH_AI_KEY;
 
-  beforeEach(() => { process.env.AWESOME_PUBLISH_AI_KEY = 'test-key'; });
+  beforeEach(() => {
+    process.env.AWESOME_PUBLISH_AI_KEY = 'test-key';
+  });
   afterEach(() => {
     if (origEnv) process.env.AWESOME_PUBLISH_AI_KEY = origEnv;
     else delete process.env.AWESOME_PUBLISH_AI_KEY;

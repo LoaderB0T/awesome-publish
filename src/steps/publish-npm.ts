@@ -34,10 +34,11 @@ export const publishNpmStep: PipelineStep<TempDirContext & VersionContext, Publi
     const results = new Map<string, PublishResult>();
     const otp = await resolveOtp(ctx);
     // --tag explicit > --pre identifier > undefined (defaults to 'latest')
-    const tag = (ctx as any).cliArgs?.tag as string | undefined
-      ?? (ctx as any).cliArgs?.pre as string | undefined;
+    const tag =
+      ((ctx as any).cliArgs?.tag as string | undefined) ??
+      ((ctx as any).cliArgs?.pre as string | undefined);
 
-    const registry = (ctx as any).cliArgs?.registry as string | undefined ?? ctx.config.registry;
+    const registry = ((ctx as any).cliArgs?.registry as string | undefined) ?? ctx.config.registry;
     debug('publish-npm', 'package manager', ctx.config.packageManager);
     debug('publish-npm', 'registry', registry);
     debug('publish-npm', 'otp provided', !!otp);
@@ -102,7 +103,9 @@ export const publishNpmStep: PipelineStep<TempDirContext & VersionContext, Publi
       const publishedSummary = published.length
         ? `\nAlready published this run: ${published.map(p => `${p.packageName}@${p.version}`).join(', ')}`
         : '';
-      throw new Error(`Failed to publish ${failed.length} package(s):\n${summary}${publishedSummary}`);
+      throw new Error(
+        `Failed to publish ${failed.length} package(s):\n${summary}${publishedSummary}`
+      );
     }
 
     return { publishResults: results };

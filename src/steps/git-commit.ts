@@ -20,17 +20,22 @@ export const gitCommitStep: PipelineStep<VersionContext & { rootDir: string }> =
   before: [Phases.GIT_TAG],
   hasSideEffects: true,
 
-  shouldRun: (ctx) => ctx.versionBumps?.size > 0,
+  shouldRun: ctx => ctx.versionBumps?.size > 0,
 
   async execute(ctx): Promise<void> {
     const git = new GitService(ctx.rootDir);
     const bumps = [...ctx.versionBumps.values()];
 
-    const message = bumps.length === 1
-      ? `chore: release v${bumps[0].to}`
-      : `chore: release\n\n${bumps.map(b => `- ${b.packageName}@${b.to}`).join('\n')}`;
+    const message =
+      bumps.length === 1
+        ? `chore: release v${bumps[0].to}`
+        : `chore: release\n\n${bumps.map(b => `- ${b.packageName}@${b.to}`).join('\n')}`;
 
-    debug('git-commit', 'committing release', bumps.map(b => `${b.packageName}@${b.to}`));
+    debug(
+      'git-commit',
+      'committing release',
+      bumps.map(b => `${b.packageName}@${b.to}`)
+    );
     await git.commitAll(message);
     debug('git-commit', 'pushing release commit');
     await git.pushCurrentBranch();

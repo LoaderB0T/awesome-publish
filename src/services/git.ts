@@ -30,7 +30,12 @@ export class GitService {
   }
 
   async getCommitsSinceTag(tag: string): Promise<Commit[]> {
-    const { stdout } = await this.exec('git', ['log', `${tag}..HEAD`, '--format=%H%n%s', '--no-merges']);
+    const { stdout } = await this.exec('git', [
+      'log',
+      `${tag}..HEAD`,
+      '--format=%H%n%s',
+      '--no-merges',
+    ]);
     if (!stdout.trim()) return [];
 
     const lines = stdout.trim().split('\n');

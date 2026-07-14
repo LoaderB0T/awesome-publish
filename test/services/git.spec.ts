@@ -65,12 +65,13 @@ describe('GitService', () => {
     writeFileSync(join(dir, 'pkg.txt'), 'bumped');
     await git.commitAll('chore: release v1.2.3');
     expect(await git.isWorkingTreeClean()).toBe(true);
-    const { stdout } = await import('node:child_process').then(cp =>
-      new Promise<{ stdout: string }>((res, rej) =>
-        cp.execFile('git', ['log', '-1', '--format=%s'], { cwd: dir }, (e, out) =>
-          e ? rej(e) : res({ stdout: out }),
-        ),
-      ),
+    const { stdout } = await import('node:child_process').then(
+      cp =>
+        new Promise<{ stdout: string }>((res, rej) =>
+          cp.execFile('git', ['log', '-1', '--format=%s'], { cwd: dir }, (e, out) =>
+            e ? rej(e) : res({ stdout: out })
+          )
+        )
     );
     expect(stdout.trim()).toBe('chore: release v1.2.3');
   });

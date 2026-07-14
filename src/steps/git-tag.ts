@@ -12,13 +12,11 @@ export function buildTagName(
   packageName: string,
   version: string,
   packageCount: number,
-  prefix: string,
+  prefix: string
 ): string {
   // Single-package: v1.2.3 or prefix-v1.2.3
   // Multi-package: pkg-name@1.2.3 or prefix-pkg-name@1.2.3
-  return packageCount === 1
-    ? `${prefix}v${version}`
-    : `${prefix}${packageName}@${version}`;
+  return packageCount === 1 ? `${prefix}v${version}` : `${prefix}${packageName}@${version}`;
 }
 
 export const gitTagStep: PipelineStep<VersionContext & { rootDir: string }> = {
@@ -28,7 +26,7 @@ export const gitTagStep: PipelineStep<VersionContext & { rootDir: string }> = {
   before: [Phases.GITHUB_RELEASE],
   hasSideEffects: true,
 
-  shouldRun: (ctx) => ctx.config.gitTag.enabled && ctx.versionBumps?.size > 0,
+  shouldRun: ctx => ctx.config.gitTag.enabled && ctx.versionBumps?.size > 0,
 
   async execute(ctx): Promise<void> {
     const git = new GitService(ctx.rootDir);

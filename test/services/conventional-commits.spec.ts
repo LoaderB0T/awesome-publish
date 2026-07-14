@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { parseConventionalCommit, determineBumpFromCommits } from '../../src/services/conventional-commits.js';
+import {
+  parseConventionalCommit,
+  determineBumpFromCommits,
+} from '../../src/services/conventional-commits.js';
 import type { Commit } from '../../src/services/git.js';
 
 function commit(message: string): Commit {

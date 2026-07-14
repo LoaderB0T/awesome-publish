@@ -36,7 +36,13 @@ function publishBinary(pm: PackageManagerName): 'npm' | 'pnpm' {
   return pm === 'pnpm' ? 'pnpm' : 'npm';
 }
 
-export function buildPublishCmd(pm: PackageManagerName, dir: string, tag?: string, otp?: string, registry?: string): string {
+export function buildPublishCmd(
+  pm: PackageManagerName,
+  dir: string,
+  tag?: string,
+  otp?: string,
+  registry?: string
+): string {
   const bin = publishBinary(pm);
   const parts = [bin, 'publish', quote(dir)];
   if (tag) parts.push('--tag', quote(tag));

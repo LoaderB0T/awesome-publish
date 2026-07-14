@@ -1,8 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { mkdtempSync, writeFileSync, mkdirSync, existsSync, readFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, mkdirSync, existsSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { rmSync } from 'node:fs';
 import { buildTempDirStep } from '../../src/steps/build-temp-dir.js';
 import type { ResolvedConfig } from '../../src/types/config.js';
 

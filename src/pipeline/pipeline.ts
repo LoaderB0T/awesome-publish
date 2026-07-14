@@ -15,10 +15,15 @@ function registerCleanupHandler() {
   cleanupRegistered = true;
   const cleanup = () => {
     for (const dir of activeTempDirs) {
-      try { rmSync(dir, { recursive: true, force: true }); } catch {}
+      try {
+        rmSync(dir, { recursive: true, force: true });
+      } catch {}
     }
   };
-  process.once('SIGINT', () => { cleanup(); process.exit(130); });
+  process.once('SIGINT', () => {
+    cleanup();
+    process.exit(130);
+  });
 }
 
 const STEP_LABELS: Record<string, string> = {
@@ -38,7 +43,7 @@ const STEP_LABELS: Record<string, string> = {
   'git-tag': 'Create git tags',
   'github-release': 'Create GitHub release',
   'ai-notes-publish': 'Publish AI notes to release',
-  'cleanup': 'Cleanup',
+  cleanup: 'Cleanup',
 };
 
 function stepLabel(name: string): string {
@@ -161,7 +166,7 @@ export interface PipelineResult {
 
 export async function runPipeline(
   steps: PipelineStep<any, any>[],
-  ctx: CoreContext,
+  ctx: CoreContext
 ): Promise<PipelineResult> {
   registerCleanupHandler();
   const sorted = topologicalSort(steps);
@@ -169,8 +174,16 @@ export async function runPipeline(
   const completed: string[] = [];
   const skipped: string[] = [];
 
-  debug('pipeline', 'sorted step order', sorted.map(s => s.name));
-  debug('pipeline', 'packages', ctx.packages.map(p => `${p.name}@${p.version}`));
+  debug(
+    'pipeline',
+    'sorted step order',
+    sorted.map(s => s.name)
+  );
+  debug(
+    'pipeline',
+    'packages',
+    ctx.packages.map(p => `${p.name}@${p.version}`)
+  );
   debug('pipeline', 'mode', ctx.mode, 'dryRun', ctx.dryRun);
 
   const items = sorted.map(s => ({ text: stepLabel(s.name), state: 'pending' as const }));

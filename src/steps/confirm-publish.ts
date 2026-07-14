@@ -11,7 +11,7 @@ export const confirmPublishStep: PipelineStep<VersionContext> = {
   before: [Phases.SYNC_DEPENDENCIES],
   hasSideEffects: false,
 
-  shouldRun: (ctx) => ctx.config.confirmPublish && ctx.mode === 'interactive' && !ctx.dryRun,
+  shouldRun: ctx => ctx.config.confirmPublish && ctx.mode === 'interactive' && !ctx.dryRun,
 
   async execute(ctx): Promise<void> {
     const bumps = ctx.versionBumps;

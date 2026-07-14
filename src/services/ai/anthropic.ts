@@ -3,7 +3,7 @@ import type { AiProvider } from './provider.js';
 export class AnthropicProvider implements AiProvider {
   constructor(
     private readonly model: string,
-    private readonly apiKey: string,
+    private readonly apiKey: string
   ) {}
 
   async generateText(prompt: string): Promise<string> {

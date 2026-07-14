@@ -12,7 +12,7 @@ export class GitHubService {
     private readonly owner: string,
     private readonly repo: string,
     private readonly token: string,
-    private readonly fetchFn: typeof fetch = fetch,
+    private readonly fetchFn: typeof fetch = fetch
   ) {
     this.baseUrl = `https://api.github.com/repos/${owner}/${repo}`;
   }

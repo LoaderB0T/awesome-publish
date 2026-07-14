@@ -10,7 +10,7 @@ export const cleanupStep: PipelineStep<Partial<TempDirContext>> = {
   after: [Phases.PUBLISH_NPM, Phases.GITHUB_RELEASE, Phases.AI_NOTES_PUBLISH],
   before: [],
 
-  shouldRun: (ctx) => ctx.tempDirs != null && ctx.tempDirs.size > 0,
+  shouldRun: ctx => ctx.tempDirs != null && ctx.tempDirs.size > 0,
 
   async execute(ctx): Promise<void> {
     if (!ctx.tempDirs) return;

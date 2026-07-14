@@ -17,7 +17,7 @@ function generateId(): string {
 function formatChangeset(
   releases: { name: string; type: 'patch' | 'minor' | 'major' }[],
   summary: string,
-  meta: { author?: string | null; email?: string | null; timestamp: string },
+  meta: { author?: string | null; email?: string | null; timestamp: string }
 ): string {
   const lines = ['---'];
   for (const r of releases) {
@@ -38,8 +38,15 @@ export const changesetCommand = defineCommand({
   meta: { name: 'changeset', description: 'Generate a changeset for changed packages' },
   args: {
     debug: { type: 'boolean' as const, description: 'Enable verbose debug logging' },
-    branch: { type: 'string' as const, description: 'Base branch to compare against', default: 'main' },
-    'ignore-git': { type: 'boolean' as const, description: 'Show all packages instead of only git-changed ones' },
+    branch: {
+      type: 'string' as const,
+      description: 'Base branch to compare against',
+      default: 'main',
+    },
+    'ignore-git': {
+      type: 'boolean' as const,
+      description: 'Show all packages instead of only git-changed ones',
+    },
   },
   async run({ args }) {
     if (args.debug) setDebug(true);
@@ -52,7 +59,11 @@ export const changesetCommand = defineCommand({
       : validateConfig({ publishFiles: ['lib'], stripScripts: true }, pm);
 
     const packages = await resolvePackages(rootDir, config);
-    debug('changeset', 'packages', packages.map(p => p.name));
+    debug(
+      'changeset',
+      'packages',
+      packages.map(p => p.name)
+    );
 
     const git = new GitService(rootDir);
     let changedPackages;
@@ -74,10 +85,14 @@ export const changesetCommand = defineCommand({
       changedPackages = packages.filter(pkg => {
         const pkgRelDir = relative(rootDir, pkg.dir).replace(/\\/g, '/');
         if (pkgRelDir === '' || pkgRelDir === '.') return changedFiles.length > 0;
-        return changedFiles.some(f => f.replace(/\\/g, '/').startsWith(pkgRelDir + '/'));
+        return changedFiles.some(f => f.replace(/\\/g, '/').startsWith(`${pkgRelDir}/`));
       });
 
-      debug('changeset', 'changed packages', changedPackages.map(p => p.name));
+      debug(
+        'changeset',
+        'changed packages',
+        changedPackages.map(p => p.name)
+      );
 
       if (changedPackages.length === 0) {
         console.log('No packages with changes found');
@@ -127,10 +142,7 @@ export const changesetCommand = defineCommand({
     }
 
     // Gather metadata
-    const [author, email] = await Promise.all([
-      git.getUserName(),
-      git.getUserEmail(),
-    ]);
+    const [author, email] = await Promise.all([git.getUserName(), git.getUserEmail()]);
     const timestamp = new Date().toISOString();
     debug('changeset', 'meta', { author, email, timestamp });
 

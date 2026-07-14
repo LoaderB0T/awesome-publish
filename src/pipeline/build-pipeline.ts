@@ -20,7 +20,10 @@ import { createGithubReleaseStep } from '../steps/create-github-release.js';
 
 export type Command = 'publish' | 'pack' | 'version';
 
-function getCoreFeaturesForCommand(command: Command, config: ResolvedConfig): PipelineStep<any, any>[] {
+function getCoreFeaturesForCommand(
+  command: Command,
+  config: ResolvedConfig
+): PipelineStep<any, any>[] {
   const steps: PipelineStep<any, any>[] = [determineVersionStep];
 
   if (command === 'publish') {
@@ -69,7 +72,8 @@ export function buildPipeline(command: Command, config: ResolvedConfig): Pipelin
   if (command === 'publish') {
     if (config.aiReleaseNotes.enabled) steps.push(generateAiNotesStep);
     if (config.github.releases.enabled) steps.push(createGithubReleaseStep);
-    if (config.aiReleaseNotes.enabled && config.github.releases.enabled) steps.push(aiNotesPublishStep);
+    if (config.aiReleaseNotes.enabled && config.github.releases.enabled)
+      steps.push(aiNotesPublishStep);
   }
 
   return steps;

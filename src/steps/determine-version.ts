@@ -29,7 +29,7 @@ async function applyPrerelease(
   bumps: Map<string, VersionBump>,
   preId: string,
   registry: string,
-  dryRun: boolean,
+  dryRun: boolean
 ): Promise<void> {
   for (const [name, bump] of bumps) {
     let baseVersion: string;
@@ -39,7 +39,10 @@ async function applyPrerelease(
       // e.g. 1.1.0-beta.1 → base is 1.1.0 (NOT bumpVersion("1.1.0", type) which double-bumps)
       baseVersion = stripPrerelease(bump.from);
       const currentPreId = extractPreIdentifier(bump.from);
-      debug('determine-version', `${name}: current is pre (${currentPreId}), reusing base ${baseVersion}`);
+      debug(
+        'determine-version',
+        `${name}: current is pre (${currentPreId}), reusing base ${baseVersion}`
+      );
     } else {
       // Stable → prerelease: use the bumped version as base
       baseVersion = bump.to;
@@ -79,7 +82,7 @@ export const determineVersionStep: PipelineStep<
     const bumps = new Map<string, VersionBump>();
     const changesets: Changeset[] | undefined = (ctx as any).changesets;
     const preId = (ctx as any).cliArgs?.pre as string | undefined;
-    const registry = (ctx as any).cliArgs?.registry as string | undefined ?? ctx.config.registry;
+    const registry = ((ctx as any).cliArgs?.registry as string | undefined) ?? ctx.config.registry;
 
     debug('determine-version', 'changesets enabled', ctx.config.changesets.enabled);
     debug('determine-version', 'changeset count', changesets?.length ?? 0);
@@ -88,7 +91,13 @@ export const determineVersionStep: PipelineStep<
     debug('determine-version', 'prerelease', preId ?? 'none');
 
     const rawBumpArg = (ctx as any).cliArgs?.bump as string | undefined;
-    if (ctx.config.changesets.enabled && !changesets?.length && ctx.mode === 'ci' && !preId && !rawBumpArg) {
+    if (
+      ctx.config.changesets.enabled &&
+      !changesets?.length &&
+      ctx.mode === 'ci' &&
+      !preId &&
+      !rawBumpArg
+    ) {
       // No changesets on this run — nothing to release. Return empty bumps so
       // the pipeline is a clean no-op (publish/tag/release steps all skip) and
       // CI stays green on ordinary commits instead of failing every push.
@@ -103,7 +112,10 @@ export const determineVersionStep: PipelineStep<
       for (const cs of changesets) {
         for (const release of cs.releases) {
           const existing = bumpTypes.get(release.name);
-          bumpTypes.set(release.name, existing ? highestBump(existing, release.type) : release.type);
+          bumpTypes.set(
+            release.name,
+            existing ? highestBump(existing, release.type) : release.type
+          );
         }
       }
       debug('determine-version', 'bump types from changesets', bumpTypes);
@@ -153,7 +165,10 @@ export const determineVersionStep: PipelineStep<
       for (const pkg of ctx.packages) {
         const latestTag = await git.getLatestTag(ctx.packages.length === 1 ? undefined : pkg.name);
         const commits = latestTag ? await git.getCommitsSinceTag(latestTag) : [];
-        debug('determine-version', `${pkg.name}: ${commits.length} commits since ${latestTag ?? 'beginning'}`);
+        debug(
+          'determine-version',
+          `${pkg.name}: ${commits.length} commits since ${latestTag ?? 'beginning'}`
+        );
 
         const detected = determineBumpFromCommits(commits);
         if (detected) {
@@ -177,7 +192,9 @@ export const determineVersionStep: PipelineStep<
 
     // 4. CI mode without anything = error
     if (ctx.mode === 'ci') {
-      throw new Error('CI mode requires --bump=patch|minor|major, changesets, or conventional commits');
+      throw new Error(
+        'CI mode requires --bump=patch|minor|major, changesets, or conventional commits'
+      );
     }
 
     // 5. Interactive prompt

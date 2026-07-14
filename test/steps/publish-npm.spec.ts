@@ -12,7 +12,9 @@ function makeCtx(overrides: Record<string, unknown> = {}) {
     config: { packageManager: 'npm', registry: 'https://registry.npmjs.org' },
     packages: [{ name: 'pkg-a', version: '1.0.0', dir: '/tmp/a', packageJson: {}, config: {} }],
     tempDirs: new Map([['pkg-a', '/tmp/temp-a']]),
-    versionBumps: new Map([['pkg-a', { packageName: 'pkg-a', from: '1.0.0', to: '1.1.0', type: 'minor' }]]),
+    versionBumps: new Map([
+      ['pkg-a', { packageName: 'pkg-a', from: '1.0.0', to: '1.1.0', type: 'minor' }],
+    ]),
     mode: 'ci',
     dryRun: false,
     cliArgs: {},
@@ -29,14 +31,22 @@ describe('publishNpmStep', () => {
   });
 
   it('throws when a package fails to publish (fail-fast)', async () => {
-    publishMock.mockImplementation(async () => { throw new Error('500 Internal Server Error'); });
+    publishMock.mockImplementation(async () => {
+      throw new Error('500 Internal Server Error');
+    });
     let err: Error | undefined;
-    try { await publishNpmStep.execute(makeCtx()); } catch (e) { err = e as Error; }
+    try {
+      await publishNpmStep.execute(makeCtx());
+    } catch (e) {
+      err = e as Error;
+    }
     expect(err?.message).toMatch(/Failed to publish/);
   });
 
   it('treats 403/already-published as skipped, not a failure', async () => {
-    publishMock.mockImplementation(async () => { throw new Error('403 Forbidden: previously published'); });
+    publishMock.mockImplementation(async () => {
+      throw new Error('403 Forbidden: previously published');
+    });
     const result = await publishNpmStep.execute(makeCtx());
     expect(result.publishResults.get('pkg-a')?.status).toBe('skipped-already-exists');
   });

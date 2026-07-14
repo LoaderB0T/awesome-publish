@@ -25,7 +25,7 @@ describe('GitHubService', () => {
         headers: expect.objectContaining({
           Authorization: 'Bearer test-token',
         }),
-      }),
+      })
     );
   });
 
@@ -35,7 +35,7 @@ describe('GitHubService', () => {
     await service.updateRelease(123, 'Updated notes');
     expect(fetchMock).toHaveBeenCalledWith(
       'https://api.github.com/repos/owner/repo/releases/123',
-      expect.objectContaining({ method: 'PATCH' }),
+      expect.objectContaining({ method: 'PATCH' })
     );
   });
 

@@ -45,7 +45,7 @@ export const modifyPackageJsonStep: PipelineStep<TempDirContext & VersionContext
       pkgJson.files = pkg.config.publishFiles;
       debug('modify-package-json', `${pkg.name}: files set to`, pkg.config.publishFiles);
 
-      writeFileSync(pkgJsonPath, JSON.stringify(pkgJson, null, 2) + '\n');
+      writeFileSync(pkgJsonPath, `${JSON.stringify(pkgJson, null, 2)}\n`);
     }
   },
 };

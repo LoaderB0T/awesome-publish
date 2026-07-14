@@ -21,7 +21,13 @@ function makeCtx(overrides: Record<string, unknown> = {}): CoreContext & Partial
       aiReleaseNotes: { enabled: false },
     },
     packages: [
-      { name: 'pkg-a', version: '1.0.0', dir: '/tmp/a', packageJson: {}, config: {} as ResolvedConfig },
+      {
+        name: 'pkg-a',
+        version: '1.0.0',
+        dir: '/tmp/a',
+        packageJson: {},
+        config: {} as ResolvedConfig,
+      },
     ],
     mode: 'ci' as const,
     dryRun: false,
@@ -32,9 +38,7 @@ function makeCtx(overrides: Record<string, unknown> = {}): CoreContext & Partial
 describe('determineVersionStep', () => {
   it('determines version from changesets', async () => {
     const ctx = makeCtx({
-      changesets: [
-        { id: 'abc', summary: 'feat', releases: [{ name: 'pkg-a', type: 'minor' }] },
-      ],
+      changesets: [{ id: 'abc', summary: 'feat', releases: [{ name: 'pkg-a', type: 'minor' }] }],
     });
     ctx.config.changesets = { enabled: true, enforceInPR: false };
 

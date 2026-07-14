@@ -19,11 +19,21 @@ function setup(pkgJson: Record<string, unknown>, config: Partial<ResolvedConfig>
     tempDir,
     ctx: {
       config: resolvedConfig,
-      packages: [{ name: 'test', version: '1.0.0', dir: '/original', packageJson: pkgJson, config: resolvedConfig }],
+      packages: [
+        {
+          name: 'test',
+          version: '1.0.0',
+          dir: '/original',
+          packageJson: pkgJson,
+          config: resolvedConfig,
+        },
+      ],
       mode: 'interactive' as const,
       dryRun: false,
       tempDirs: new Map([['test', tempDir]]),
-      versionBumps: new Map([['test', { packageName: 'test', from: '1.0.0', to: '1.1.0', type: 'minor' as const }]]),
+      versionBumps: new Map([
+        ['test', { packageName: 'test', from: '1.0.0', to: '1.1.0', type: 'minor' as const }],
+      ]),
     },
   };
 }
@@ -31,7 +41,8 @@ function setup(pkgJson: Record<string, unknown>, config: Partial<ResolvedConfig>
 describe('modifyPackageJsonStep', () => {
   it('strips all scripts when stripScripts is true', async () => {
     const { tempDir, ctx } = setup({
-      name: 'test', version: '1.0.0',
+      name: 'test',
+      version: '1.0.0',
       scripts: { build: 'tsc', test: 'vitest', preinstall: 'check' },
     });
 
@@ -42,8 +53,12 @@ describe('modifyPackageJsonStep', () => {
 
   it('strips only listed scripts when stripScripts is string[]', async () => {
     const { tempDir, ctx } = setup(
-      { name: 'test', version: '1.0.0', scripts: { build: 'tsc', test: 'vitest', start: 'node .' } },
-      { stripScripts: ['build', 'test'] },
+      {
+        name: 'test',
+        version: '1.0.0',
+        scripts: { build: 'tsc', test: 'vitest', start: 'node .' },
+      },
+      { stripScripts: ['build', 'test'] }
     );
 
     await modifyPackageJsonStep.execute(ctx as any);

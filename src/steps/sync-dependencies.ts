@@ -5,7 +5,12 @@ import type { PipelineStep } from '../pipeline/step.js';
 import type { VersionContext } from '../pipeline/context.js';
 import { debug } from '../services/debug.js';
 
-const DEP_FIELDS = ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies'] as const;
+const DEP_FIELDS = [
+  'dependencies',
+  'devDependencies',
+  'peerDependencies',
+  'optionalDependencies',
+] as const;
 
 export const syncDependenciesStep: PipelineStep<VersionContext> = {
   name: 'sync-dependencies',
@@ -14,7 +19,11 @@ export const syncDependenciesStep: PipelineStep<VersionContext> = {
   before: [Phases.WRITE_VERSIONS],
   hasSideEffects: true,
 
-  shouldRun: (ctx) => ctx.config.syncDependencies && ctx.versionBumps?.size > 0 && ctx.packages.length > 1 && !ctx.isPrerelease,
+  shouldRun: ctx =>
+    ctx.config.syncDependencies &&
+    ctx.versionBumps?.size > 0 &&
+    ctx.packages.length > 1 &&
+    !ctx.isPrerelease,
 
   async execute(ctx): Promise<void> {
     const bumpedNames = new Map<string, string>();
@@ -37,7 +46,10 @@ export const syncDependenciesStep: PipelineStep<VersionContext> = {
 
           // I7: Skip workspace:* protocol ranges — pnpm resolves these automatically
           if (currentRange.startsWith('workspace:')) {
-            debug('sync-dependencies', `${pkg.name}: skipping workspace protocol range ${depName}@${currentRange}`);
+            debug(
+              'sync-dependencies',
+              `${pkg.name}: skipping workspace protocol range ${depName}@${currentRange}`
+            );
             continue;
           }
 
@@ -47,7 +59,10 @@ export const syncDependenciesStep: PipelineStep<VersionContext> = {
           const updatedRange = `${prefix}${newVersion}`;
 
           if (deps[depName] !== updatedRange) {
-            debug('sync-dependencies', `${pkg.name}: ${field}.${depName} ${currentRange} → ${updatedRange}`);
+            debug(
+              'sync-dependencies',
+              `${pkg.name}: ${field}.${depName} ${currentRange} → ${updatedRange}`
+            );
             deps[depName] = updatedRange;
             modified = true;
           }
@@ -55,7 +70,7 @@ export const syncDependenciesStep: PipelineStep<VersionContext> = {
       }
 
       if (modified) {
-        writeFileSync(pkgJsonPath, JSON.stringify(pkgJson, null, 2) + '\n');
+        writeFileSync(pkgJsonPath, `${JSON.stringify(pkgJson, null, 2)}\n`);
         debug('sync-dependencies', `updated ${pkgJsonPath}`);
       }
     }
