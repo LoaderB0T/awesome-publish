@@ -8,7 +8,7 @@ import { debug } from '../services/debug.js';
 export const writeVersionsStep: PipelineStep<VersionContext> = {
   name: 'write-versions',
   phase: Phases.WRITE_VERSIONS,
-  after: [Phases.CONSUME_CHANGESETS],
+  after: [Phases.DETERMINE_VERSION],
   before: [Phases.BUILD_TEMP_DIR],
   hasSideEffects: true,
 

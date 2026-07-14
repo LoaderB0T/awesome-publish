@@ -21,15 +21,20 @@ export interface ConventionalCommit {
   original: Commit;
 }
 
+// Conventional Commits breaking-change footer, e.g. "BREAKING CHANGE: ..." or
+// "BREAKING-CHANGE: ..." anywhere in the commit body.
+const BREAKING_FOOTER_RE = /^BREAKING[ -]CHANGE:/m;
+
 export function parseConventionalCommit(commit: Commit): ConventionalCommit | null {
   const match = commit.message.match(/^(\w+)(?:\(([^)]+)\))?(!)?:\s*(.+)$/);
   if (!match) return null;
 
   const [, type, scope, bang, description] = match;
+  const breaking = !!bang || BREAKING_FOOTER_RE.test(commit.body ?? '');
   return {
     type: type.toLowerCase(),
     scope: scope || undefined,
-    breaking: !!bang,
+    breaking,
     description,
     original: commit,
   };

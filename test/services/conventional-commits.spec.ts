@@ -5,8 +5,8 @@ import {
 } from '../../src/services/conventional-commits.js';
 import type { Commit } from '../../src/services/git.js';
 
-function commit(message: string): Commit {
-  return { hash: 'abc123', message };
+function commit(message: string, body?: string): Commit {
+  return { hash: 'abc123', message, body };
 }
 
 describe('parseConventionalCommit', () => {
@@ -36,6 +36,20 @@ describe('parseConventionalCommit', () => {
     expect(result!.scope).toBe('core');
   });
 
+  it('detects BREAKING CHANGE footer in the commit body', () => {
+    const result = parseConventionalCommit(
+      commit('feat: new api', 'Adds the new api.\n\nBREAKING CHANGE: old api removed')
+    );
+    expect(result!.breaking).toBe(true);
+  });
+
+  it('detects the BREAKING-CHANGE hyphenated footer', () => {
+    const result = parseConventionalCommit(
+      commit('fix: tweak', 'BREAKING-CHANGE: signature changed')
+    );
+    expect(result!.breaking).toBe(true);
+  });
+
   it('returns null for non-conventional commit', () => {
     expect(parseConventionalCommit(commit('update stuff'))).toBeNull();
     expect(parseConventionalCommit(commit('WIP'))).toBeNull();
@@ -45,6 +59,11 @@ describe('parseConventionalCommit', () => {
 describe('determineBumpFromCommits', () => {
   it('returns major for breaking change', () => {
     const commits = [commit('fix: small fix'), commit('feat!: breaking change')];
+    expect(determineBumpFromCommits(commits)).toBe('major');
+  });
+
+  it('returns major when a body carries a BREAKING CHANGE footer', () => {
+    const commits = [commit('feat: thing', 'BREAKING CHANGE: dropped support for X')];
     expect(determineBumpFromCommits(commits)).toBe('major');
   });
 

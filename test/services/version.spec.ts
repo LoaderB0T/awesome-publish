@@ -22,14 +22,16 @@ describe('bumpVersion', () => {
     expect(bumpVersion('1.2.3', 'major')).toBe('2.0.0');
   });
 
-  it('handles prerelease version (strips suffix)', () => {
-    expect(bumpVersion('1.0.0-beta.1', 'patch')).toBe('1.0.1');
-    expect(bumpVersion('1.0.0-beta.1', 'minor')).toBe('1.1.0');
-    expect(bumpVersion('2.0.0-rc.3', 'major')).toBe('3.0.0');
+  it('finalizes a prerelease to its target version (standard semver)', () => {
+    // semver.inc: finalizing a prerelease keeps the version it was staging,
+    // it does not bump past it.
+    expect(bumpVersion('1.0.0-beta.1', 'patch')).toBe('1.0.0');
+    expect(bumpVersion('1.0.0-beta.1', 'minor')).toBe('1.0.0');
+    expect(bumpVersion('2.0.0-rc.3', 'major')).toBe('2.0.0');
   });
 
   it('handles prerelease with alpha suffix', () => {
-    expect(bumpVersion('0.5.0-alpha.0', 'patch')).toBe('0.5.1');
+    expect(bumpVersion('0.5.0-alpha.0', 'patch')).toBe('0.5.0');
   });
 
   it('throws on invalid version (too few parts)', () => {
@@ -37,7 +39,7 @@ describe('bumpVersion', () => {
   });
 
   it('throws on non-numeric version', () => {
-    expect(() => bumpVersion('a.b.c', 'patch')).toThrow(/non-numeric/);
+    expect(() => bumpVersion('a.b.c', 'patch')).toThrow(/Invalid version/);
   });
 
   it('handles zero versions', () => {

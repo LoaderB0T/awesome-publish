@@ -20,10 +20,18 @@ function registerCleanupHandler() {
       } catch {}
     }
   };
+  // Best-effort temp-dir cleanup on abnormal termination. Signals clean up then
+  // exit with the conventional 128+signal code; 'exit' cleans up without
+  // re-exiting (calling process.exit inside an 'exit' handler is a no-op).
   process.once('SIGINT', () => {
     cleanup();
     process.exit(130);
   });
+  process.once('SIGTERM', () => {
+    cleanup();
+    process.exit(143);
+  });
+  process.once('exit', cleanup);
 }
 
 const STEP_LABELS: Record<string, string> = {

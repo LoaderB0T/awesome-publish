@@ -39,6 +39,8 @@ export function normalizeConfig(
     registry: raw.registry ?? DEFAULT_CONFIG.registry,
     publishFiles: raw.publishFiles,
     stripScripts: raw.stripScripts,
+    access: raw.access ?? DEFAULT_CONFIG.access,
+    provenance: raw.provenance ?? DEFAULT_CONFIG.provenance,
     requireCleanGit: raw.requireCleanGit ?? DEFAULT_CONFIG.requireCleanGit,
     gitTag,
     changelog,
@@ -77,6 +79,35 @@ export function validateConfig(
     throw new Error(
       `Config error: github.releases.mode must be 'per-package' or 'combined', got '${raw.github.releases.mode}'`
     );
+  }
+
+  if (raw.access && !['public', 'restricted'].includes(raw.access)) {
+    throw new Error(`Config error: access must be 'public' or 'restricted', got '${raw.access}'`);
+  }
+
+  if (raw.registry && !/^https?:\/\//.test(raw.registry)) {
+    throw new Error(`Config error: registry must be an http(s) URL, got '${raw.registry}'`);
+  }
+
+  if (raw.aiProvider) {
+    if (!['anthropic', 'openai-compatible'].includes(raw.aiProvider.provider)) {
+      throw new Error(
+        `Config error: aiProvider.provider must be 'anthropic' or 'openai-compatible', got '${raw.aiProvider.provider}'`
+      );
+    }
+    if (!raw.aiProvider.model) {
+      throw new Error('Config error: aiProvider.model is required');
+    }
+    if (raw.aiProvider.provider === 'openai-compatible' && !raw.aiProvider.baseUrl) {
+      throw new Error(
+        "Config error: aiProvider.baseUrl is required for the 'openai-compatible' provider"
+      );
+    }
+    if (raw.aiProvider.baseUrl && !/^https?:\/\//.test(raw.aiProvider.baseUrl)) {
+      throw new Error(
+        `Config error: aiProvider.baseUrl must be an http(s) URL, got '${raw.aiProvider.baseUrl}'`
+      );
+    }
   }
 
   const aiEnabled =

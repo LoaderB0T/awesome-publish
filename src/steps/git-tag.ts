@@ -19,6 +19,16 @@ export function buildTagName(
   return packageCount === 1 ? `${prefix}v${version}` : `${prefix}${packageName}@${version}`;
 }
 
+/**
+ * Build the `git describe --match` prefix that finds the latest tag for a
+ * package, matching whatever scheme buildTagName produces (so single-package
+ * repos and prefixed tags resolve correctly). Callers pass the result to
+ * GitService.getLatestTag, which appends the `*` glob.
+ */
+export function tagMatchPrefix(packageName: string, packageCount: number, prefix: string): string {
+  return packageCount === 1 ? `${prefix}v` : `${prefix}${packageName}@`;
+}
+
 export const gitTagStep: PipelineStep<VersionContext & { rootDir: string }> = {
   name: 'git-tag',
   phase: Phases.GIT_TAG,

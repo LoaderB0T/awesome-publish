@@ -7,6 +7,7 @@ import type { Changeset } from '../types/changeset.js';
 import type { VersionBump } from '../types/package-info.js';
 import { GitService } from '../services/git.js';
 import { groupCommitsByType } from '../services/conventional-commits.js';
+import { tagMatchPrefix } from './git-tag.js';
 import { debug } from '../services/debug.js';
 
 const TYPE_HEADERS: Record<string, string> = {
@@ -102,7 +103,9 @@ export const writeChangelogStep: PipelineStep<
       const bump = ctx.versionBumps.get(pkg.name);
       if (!bump) continue;
 
-      const latestTag = await git.getLatestTag(pkg.name);
+      const latestTag = await git.getLatestTag(
+        tagMatchPrefix(pkg.name, ctx.packages.length, ctx.config.gitTag.prefix)
+      );
       const commits = latestTag ? await git.getCommitsSinceTag(latestTag) : [];
       debug(
         'write-changelog',

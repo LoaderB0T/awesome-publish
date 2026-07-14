@@ -1,11 +1,17 @@
 import { Phases } from '../pipeline/phases.js';
 import type { PipelineStep } from '../pipeline/step.js';
-import type { AiNotesContext, GithubReleaseContext } from '../pipeline/context.js';
-import { GitHubService } from '../services/github.js';
+import type {
+  AiNotesContext,
+  GithubReleaseContext,
+  PublishContext,
+  VersionContext,
+} from '../pipeline/context.js';
+import { GitHubService, parseGitHubRepo } from '../services/github.js';
+import { buildCombinedReleaseBody } from './create-github-release.js';
 import { debug } from '../services/debug.js';
 
 export const aiNotesPublishStep: PipelineStep<
-  AiNotesContext & GithubReleaseContext & { rootDir: string }
+  AiNotesContext & GithubReleaseContext & PublishContext & VersionContext & { rootDir: string }
 > = {
   name: 'ai-notes-publish',
   phase: Phases.AI_NOTES_PUBLISH,
@@ -23,23 +29,27 @@ export const aiNotesPublishStep: PipelineStep<
       return;
     }
 
-    const { execFile } = await import('node:child_process');
-    const { promisify } = await import('node:util');
-    const exec = promisify(execFile);
-    const { stdout } = await exec('git', ['remote', 'get-url', 'origin'], { cwd: ctx.rootDir });
-    const match = stdout.trim().match(/[:/]([^/]+)\/([^/.]+?)(?:\.git)?$/);
-    if (!match) return;
+    let owner: string;
+    let repo: string;
+    try {
+      ({ owner, repo } = await parseGitHubRepo(ctx.rootDir));
+    } catch {
+      return;
+    }
 
-    const github = new GitHubService(match[1], match[2], token);
-    debug('ai-notes-publish', `repo: ${match[1]}/${match[2]}`);
+    const github = new GitHubService(owner, repo, token);
+    debug('ai-notes-publish', `repo: ${owner}/${repo}`);
     debug('ai-notes-publish', 'mode', ctx.config.github.releases.mode);
 
     if (ctx.config.github.releases.mode === 'combined') {
       const releaseId = ctx.releaseIds.get('combined');
       if (!releaseId) return;
-      const allNotes = Array.from(ctx.releaseNotes.entries())
-        .map(([name, notes]) => `## ${name}\n\n${notes}`)
+      const notes = Array.from(ctx.releaseNotes.entries())
+        .map(([name, n]) => `## ${name}\n\n${n}`)
         .join('\n\n---\n\n');
+      // Keep the "Published packages" version table that create-github-release
+      // wrote — updateRelease replaces the whole body, so re-prepend it.
+      const allNotes = `${buildCombinedReleaseBody(ctx)}\n\n${notes}`;
       debug(
         'ai-notes-publish',
         `updating combined release id=${releaseId} (${allNotes.length} chars)`

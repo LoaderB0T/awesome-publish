@@ -12,16 +12,71 @@ function readPackageJson(dir: string): Record<string, unknown> {
 }
 
 function resolveGlobPatterns(rootDir: string, patterns: string[]): string[] {
-  const dirs: string[] = [];
-  for (const pattern of patterns) {
-    const matches = globSync(pattern, { cwd: rootDir, absolute: true });
+  // pnpm/yarn support `!`-prefixed exclusion patterns; honor them as globby
+  // ignores rather than feeding them back as literal include patterns.
+  const includes = patterns.filter(p => !p.startsWith('!'));
+  const ignore = patterns.filter(p => p.startsWith('!')).map(p => p.slice(1));
+
+  const dirs = new Set<string>();
+  for (const pattern of includes) {
+    const matches = globSync(pattern, { cwd: rootDir, absolute: true, ignore });
     for (const match of matches) {
       if (existsSync(join(match, 'package.json'))) {
-        dirs.push(match);
+        dirs.add(match); // Set dedups overlapping patterns.
       }
     }
   }
-  return dirs;
+  return [...dirs];
+}
+
+const DEP_FIELDS = [
+  'dependencies',
+  'devDependencies',
+  'peerDependencies',
+  'optionalDependencies',
+] as const;
+
+/**
+ * Order packages so a dependency is published before any package that depends
+ * on it (topological sort over intra-workspace deps). Falls back to the
+ * original order if a dependency cycle is detected.
+ */
+function topoSortPackages(packages: PackageInfo[]): PackageInfo[] {
+  const byName = new Map(packages.map(p => [p.name, p]));
+  const inDegree = new Map<string, number>();
+  const dependents = new Map<string, Set<string>>();
+  for (const p of packages) {
+    inDegree.set(p.name, 0);
+    dependents.set(p.name, new Set());
+  }
+
+  for (const p of packages) {
+    for (const field of DEP_FIELDS) {
+      const deps = p.packageJson[field] as Record<string, string> | undefined;
+      if (!deps) continue;
+      for (const depName of Object.keys(deps)) {
+        if (depName === p.name || !byName.has(depName)) continue;
+        if (!dependents.get(depName)!.has(p.name)) {
+          dependents.get(depName)!.add(p.name);
+          inDegree.set(p.name, inDegree.get(p.name)! + 1);
+        }
+      }
+    }
+  }
+
+  const queue = packages.filter(p => inDegree.get(p.name) === 0).map(p => p.name);
+  const sorted: PackageInfo[] = [];
+  for (let i = 0; i < queue.length; i++) {
+    const name = queue[i];
+    sorted.push(byName.get(name)!);
+    for (const dependent of dependents.get(name)!) {
+      const deg = inDegree.get(dependent)! - 1;
+      inDegree.set(dependent, deg);
+      if (deg === 0) queue.push(dependent);
+    }
+  }
+
+  return sorted.length === packages.length ? sorted : packages;
 }
 
 function matchesFilter(name: string, filter: string): boolean {
@@ -38,12 +93,12 @@ export async function resolvePackages(
   filter?: string
 ): Promise<PackageInfo[]> {
   const rootPkg = readPackageJson(rootDir);
-  const workspaces = rootPkg.workspaces as string[] | undefined;
+  const workspacePatterns = getWorkspacePatterns(rootPkg);
 
   let packageDirs: string[];
 
-  if (workspaces && Array.isArray(workspaces)) {
-    packageDirs = resolveGlobPatterns(rootDir, workspaces);
+  if (workspacePatterns) {
+    packageDirs = resolveGlobPatterns(rootDir, workspacePatterns);
   } else if (existsSync(join(rootDir, 'pnpm-workspace.yaml'))) {
     const yamlContent = readFileSync(join(rootDir, 'pnpm-workspace.yaml'), 'utf-8');
     const patterns = parseWorkspaceYaml(yamlContent);
@@ -81,7 +136,21 @@ export async function resolvePackages(
     });
   }
 
-  return packages;
+  return topoSortPackages(packages);
+}
+
+/**
+ * Extract workspace glob patterns from a root package.json. Supports both the
+ * array form (`"workspaces": [...]`) and yarn's object form
+ * (`"workspaces": { "packages": [...] }`).
+ */
+function getWorkspacePatterns(rootPkg: Record<string, unknown>): string[] | undefined {
+  const ws = rootPkg.workspaces;
+  if (Array.isArray(ws)) return ws as string[];
+  if (ws && typeof ws === 'object' && Array.isArray((ws as { packages?: unknown }).packages)) {
+    return (ws as { packages: string[] }).packages;
+  }
+  return undefined;
 }
 
 function parseWorkspaceYaml(content: string): string[] {

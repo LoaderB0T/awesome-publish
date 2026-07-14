@@ -3,6 +3,10 @@ export interface AwesomePublishConfig {
   registry?: string;
   publishFiles: string[];
   stripScripts: boolean | string[];
+  /** npm access for scoped packages on first publish. Default 'public'. */
+  access?: 'public' | 'restricted';
+  /** Publish with npm provenance (requires OIDC, e.g. GitHub Actions id-token). Default false. */
+  provenance?: boolean;
   requireCleanGit?: boolean;
   gitTag?:
     | boolean
@@ -48,6 +52,8 @@ export interface ResolvedConfig {
   registry: string;
   publishFiles: string[];
   stripScripts: boolean | string[];
+  access: 'public' | 'restricted';
+  provenance: boolean;
   requireCleanGit: boolean;
   gitTag: { enabled: boolean; prefix: string };
   changelog: { enabled: boolean; file: string };

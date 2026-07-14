@@ -6,7 +6,7 @@ import { detectPackageManager } from '../../services/package-manager.js';
 import { resolvePackages } from '../../services/workspace.js';
 import { buildPipeline } from '../../pipeline/build-pipeline.js';
 import { runPipeline } from '../../pipeline/pipeline.js';
-import { GitService } from '../../services/git.js';
+import { assertGitClean } from '../git-check.js';
 import { setDebug, debug } from '../../services/debug.js';
 
 export const versionCommand = defineCommand({
@@ -33,14 +33,7 @@ export const versionCommand = defineCommand({
       : validateConfig({ publishFiles: ['lib'], stripScripts: true }, pm);
     debug('version', 'resolved config', config);
 
-    if (config.requireCleanGit && !args['ignore-git']) {
-      const git = new GitService(rootDir);
-      const clean = await git.isWorkingTreeClean();
-      debug('version', 'git clean', clean);
-      if (!clean) {
-        throw new Error('Working tree is not clean. Commit or stash changes, or use --ignore-git');
-      }
-    }
+    await assertGitClean(rootDir, config, args['ignore-git']);
 
     const packages = await resolvePackages(rootDir, config, args.filter);
     debug(

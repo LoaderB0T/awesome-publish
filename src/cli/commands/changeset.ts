@@ -8,6 +8,7 @@ import { validateConfig } from '../../config/schema.js';
 import { detectPackageManager } from '../../services/package-manager.js';
 import { resolvePackages } from '../../services/workspace.js';
 import { GitService } from '../../services/git.js';
+import { validateBumpType } from '../../services/version.js';
 import { setDebug, debug } from '../../services/debug.js';
 
 function generateId(): string {
@@ -47,9 +48,23 @@ export const changesetCommand = defineCommand({
       type: 'boolean' as const,
       description: 'Show all packages instead of only git-changed ones',
     },
+    ci: {
+      type: 'boolean' as const,
+      description: 'Non-interactive: build the changeset from --type/--summary/--packages',
+    },
+    type: {
+      type: 'string' as const,
+      description: 'Bump type for --ci mode (patch|minor|major)',
+    },
+    summary: { type: 'string' as const, description: 'Changeset summary for --ci mode' },
+    packages: {
+      type: 'string' as const,
+      description: 'Comma-separated package names for --ci mode (default: all changed)',
+    },
   },
   async run({ args }) {
     if (args.debug) setDebug(true);
+    const nonInteractive = args.ci ?? false;
 
     const rootDir = process.cwd();
     const pm = detectPackageManager(rootDir);
@@ -68,8 +83,9 @@ export const changesetCommand = defineCommand({
     const git = new GitService(rootDir);
     let changedPackages;
 
-    if (args['ignore-git']) {
-      debug('changeset', '--ignore-git flag, showing all packages');
+    if (args['ignore-git'] || (nonInteractive && args.packages)) {
+      // Explicit package list (or --ignore-git) bypasses git change detection.
+      debug('changeset', 'skipping git change detection');
       changedPackages = packages;
     } else {
       // Find changed files since base branch
@@ -100,45 +116,70 @@ export const changesetCommand = defineCommand({
       }
     }
 
-    // Select packages via toggle prompt
-    const selectedNames = await AwesomeLogger.prompt('toggle', {
-      text: 'Select packages to include in changeset:',
-      options: changedPackages.map(p => p.name),
-      default: changedPackages.map(p => p.name),
-    }).result;
-
-    if (selectedNames.length === 0) {
-      console.log('No packages selected');
-      return;
-    }
-
-    debug('changeset', 'selected', selectedNames);
-
-    // Ask bump type per package
     const releases: { name: string; type: 'patch' | 'minor' | 'major' }[] = [];
+    let summary: string;
 
-    for (const name of selectedNames) {
-      const bumpType = await AwesomeLogger.prompt('choice', {
-        text: `Bump type for ${name}:`,
-        options: ['patch', 'minor', 'major'],
+    if (nonInteractive) {
+      // CI mode: everything comes from flags. One bump type applies to all
+      // selected packages (edit the file afterwards for per-package types).
+      if (!args.type) throw new Error('--ci requires --type=patch|minor|major');
+      if (!args.summary?.trim()) throw new Error('--ci requires --summary');
+      const type = validateBumpType(args.type);
+
+      const requested = args.packages
+        ? args.packages
+            .split(',')
+            .map(s => s.trim())
+            .filter(Boolean)
+        : changedPackages.map(p => p.name);
+
+      const known = new Set(packages.map(p => p.name));
+      for (const name of requested) {
+        if (!known.has(name)) throw new Error(`Unknown package: "${name}"`);
+        releases.push({ name, type });
+      }
+      if (releases.length === 0) throw new Error('No packages to include in changeset');
+      summary = args.summary.trim();
+    } else {
+      // Select packages via toggle prompt
+      const selectedNames = await AwesomeLogger.prompt('toggle', {
+        text: 'Select packages to include in changeset:',
+        options: changedPackages.map(p => p.name),
+        default: changedPackages.map(p => p.name),
       }).result;
-      releases.push({ name, type: bumpType as 'patch' | 'minor' | 'major' });
-    }
 
-    // Ask for summary
-    const summary = await AwesomeLogger.prompt('text', {
-      text: 'Changeset summary:',
-      hints: [],
-      default: '',
-      allowOnlyHints: false,
-      caseInsensitive: false,
-      fuzzyAutoComplete: false,
-      validators: [],
-    }).result;
+      if (selectedNames.length === 0) {
+        console.log('No packages selected');
+        return;
+      }
 
-    if (!summary.trim()) {
-      console.log('Changeset summary cannot be empty');
-      return;
+      debug('changeset', 'selected', selectedNames);
+
+      // Ask bump type per package
+      for (const name of selectedNames) {
+        const bumpType = await AwesomeLogger.prompt('choice', {
+          text: `Bump type for ${name}:`,
+          options: ['patch', 'minor', 'major'],
+        }).result;
+        releases.push({ name, type: bumpType as 'patch' | 'minor' | 'major' });
+      }
+
+      // Ask for summary
+      const summaryInput = await AwesomeLogger.prompt('text', {
+        text: 'Changeset summary:',
+        hints: [],
+        default: '',
+        allowOnlyHints: false,
+        caseInsensitive: false,
+        fuzzyAutoComplete: false,
+        validators: [],
+      }).result;
+
+      if (!summaryInput.trim()) {
+        console.log('Changeset summary cannot be empty');
+        return;
+      }
+      summary = summaryInput.trim();
     }
 
     // Gather metadata

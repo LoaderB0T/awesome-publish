@@ -6,6 +6,8 @@ const execFileAsync = promisify(execFile);
 export interface Commit {
   hash: string;
   message: string;
+  /** Commit body (everything after the subject line), used to detect the Conventional Commits `BREAKING CHANGE:` footer. */
+  body?: string;
 }
 
 export class GitService {
@@ -30,18 +32,22 @@ export class GitService {
   }
 
   public async getCommitsSinceTag(tag: string): Promise<Commit[]> {
+    // Unit separator (0x1f) between fields, record separator (0x1e) between
+    // commits, so multi-line bodies survive and we can detect the
+    // `BREAKING CHANGE:` footer (not just the `!` bang in the subject).
     const { stdout } = await this.exec('git', [
       'log',
       `${tag}..HEAD`,
-      '--format=%H%n%s',
+      '--format=%H%x1f%s%x1f%b%x1e',
       '--no-merges',
     ]);
-    if (!stdout.trim()) return [];
 
-    const lines = stdout.trim().split('\n');
     const commits: Commit[] = [];
-    for (let i = 0; i < lines.length; i += 2) {
-      commits.push({ hash: lines[i], message: lines[i + 1] });
+    for (const record of stdout.split('\x1e')) {
+      const trimmed = record.trim();
+      if (!trimmed) continue;
+      const [hash, message = '', body = ''] = trimmed.split('\x1f');
+      commits.push({ hash: hash.trim(), message: message.trim(), body: body.trim() });
     }
     return commits;
   }
@@ -66,8 +72,29 @@ export class GitService {
     await this.exec('git', ['commit', '-m', message]);
   }
 
+  public async getCurrentBranch(): Promise<string | null> {
+    try {
+      const { stdout } = await this.exec('git', ['rev-parse', '--abbrev-ref', 'HEAD']);
+      const branch = stdout.trim();
+      // "HEAD" means detached (e.g. actions/checkout's default state).
+      return branch && branch !== 'HEAD' ? branch : null;
+    } catch {
+      return null;
+    }
+  }
+
   public async pushCurrentBranch(): Promise<void> {
-    await this.exec('git', ['push']);
+    // Push an explicit refspec instead of a bare `git push`. A bare push relies
+    // on an upstream + push.default, which is absent on a detached HEAD (the
+    // default state after actions/checkout in CI) and fails there.
+    const branch = await this.getCurrentBranch();
+    if (branch) {
+      await this.exec('git', ['push', 'origin', `HEAD:${branch}`]);
+    } else {
+      // Detached HEAD: fall back to a bare push so the underlying git error is
+      // surfaced to the user rather than us guessing a branch name.
+      await this.exec('git', ['push']);
+    }
   }
 
   public async pushTags(tags?: string[]): Promise<void> {

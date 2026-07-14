@@ -31,14 +31,32 @@ export const initCommand = defineCommand({
   meta: { name: 'init', description: 'Initialize awesome-publish configuration' },
   args: {
     debug: { type: 'boolean' as const, description: 'Enable verbose debug logging' },
+    yes: {
+      type: 'boolean' as const,
+      description: 'Non-interactive: accept sensible defaults without prompting',
+    },
+    force: {
+      type: 'boolean' as const,
+      description: 'Overwrite existing config/workflow files instead of skipping them',
+    },
+    files: {
+      type: 'string' as const,
+      description: 'Comma/space-separated publishFiles (with --yes). Default: lib',
+    },
+    provenance: {
+      type: 'boolean' as const,
+      description: 'Enable npm provenance in the generated workflow',
+    },
   },
   async run({ args }) {
     if (args.debug) setDebug(true);
 
     const rootDir = process.cwd();
     const pm = detectPackageManager(rootDir);
+    const nonInteractive = args.yes ?? false;
+    const force = args.force ?? false;
     debug('init', 'rootDir', rootDir);
-    debug('init', 'package manager', pm);
+    debug('init', 'package manager', pm, 'nonInteractive', nonInteractive);
 
     console.log('Setting up awesome-publish...\n');
     console.log(`Detected package manager: ${pm}`);
@@ -50,58 +68,83 @@ export const initCommand = defineCommand({
       console.log('');
     }
 
-    // --- Prompts ---
+    // --- Gather options (defaults in --yes mode, otherwise prompt) ---
 
-    const publishFilesInput = await AwesomeLogger.prompt('text', {
-      text: 'Which files/dirs to include in published package?',
-      hints: ['lib', 'dist', 'README.md', 'LICENSE'],
-      default: 'lib',
-      allowOnlyHints: false,
-      caseInsensitive: false,
-      fuzzyAutoComplete: false,
-      validators: [],
-    }).result;
-
-    const publishFiles = publishFilesInput.split(/[,\s]+/).filter(Boolean);
-
-    const stripScripts = await AwesomeLogger.prompt('confirm', {
-      text: 'Strip scripts from published package.json?',
-      default: 'yes',
-    }).result;
-
-    const changesetsEnabled = await AwesomeLogger.prompt('confirm', {
-      text: 'Enable changesets for version management?',
-      default: 'yes',
-    }).result;
-
+    let publishFiles: string[];
+    let stripScripts: boolean;
+    let changesetsEnabled: boolean;
     let enforceInPR = false;
-    if (changesetsEnabled) {
-      enforceInPR = await AwesomeLogger.prompt('confirm', {
-        text: 'Enforce changesets in pull requests (via GitHub Action)?',
+    let githubReleasesEnabled: boolean;
+    let releaseMode: 'per-package' | 'combined' = 'per-package';
+    let aiNotesEnabled: boolean;
+    let provenance = args.provenance ?? false;
+    let writeWorkflow = false;
+    let writeChangesetCheck = false;
+    let aiProvider: ResolvedConfig['aiProvider'] | undefined;
+
+    if (nonInteractive) {
+      publishFiles = (args.files ?? 'lib').split(/[,\s]+/).filter(Boolean);
+      stripScripts = true;
+      changesetsEnabled = true;
+      enforceInPR = true;
+      githubReleasesEnabled = true;
+      aiNotesEnabled = false;
+      writeWorkflow = true;
+      writeChangesetCheck = true;
+    } else {
+      const publishFilesInput = await AwesomeLogger.prompt('text', {
+        text: 'Which files/dirs to include in published package?',
+        hints: ['lib', 'dist', 'README.md', 'LICENSE'],
+        default: 'lib',
+        allowOnlyHints: false,
+        caseInsensitive: false,
+        fuzzyAutoComplete: false,
+        validators: [],
+      }).result;
+
+      publishFiles = publishFilesInput.split(/[,\s]+/).filter(Boolean);
+
+      stripScripts = await AwesomeLogger.prompt('confirm', {
+        text: 'Strip scripts from published package.json?',
         default: 'yes',
       }).result;
-    }
 
-    const githubReleasesEnabled = await AwesomeLogger.prompt('confirm', {
-      text: 'Enable GitHub releases?',
-      default: 'yes',
-    }).result;
-
-    let releaseMode: 'per-package' | 'combined' = 'per-package';
-    if (githubReleasesEnabled) {
-      const modeChoice = await AwesomeLogger.prompt('choice', {
-        text: 'GitHub release mode?',
-        options: ['per-package', 'combined'],
+      changesetsEnabled = await AwesomeLogger.prompt('confirm', {
+        text: 'Enable changesets for version management?',
+        default: 'yes',
       }).result;
-      releaseMode = modeChoice as 'per-package' | 'combined';
+
+      if (changesetsEnabled) {
+        enforceInPR = await AwesomeLogger.prompt('confirm', {
+          text: 'Enforce changesets in pull requests (via GitHub Action)?',
+          default: 'yes',
+        }).result;
+      }
+
+      githubReleasesEnabled = await AwesomeLogger.prompt('confirm', {
+        text: 'Enable GitHub releases?',
+        default: 'yes',
+      }).result;
+
+      if (githubReleasesEnabled) {
+        const modeChoice = await AwesomeLogger.prompt('choice', {
+          text: 'GitHub release mode?',
+          options: ['per-package', 'combined'],
+        }).result;
+        releaseMode = modeChoice as 'per-package' | 'combined';
+      }
+
+      provenance = await AwesomeLogger.prompt('confirm', {
+        text: 'Enable npm provenance (OIDC) in the workflow?',
+        default: 'no',
+      }).result;
+
+      aiNotesEnabled = await AwesomeLogger.prompt('confirm', {
+        text: 'Enable AI-generated release notes?',
+        default: 'no',
+      }).result;
     }
 
-    const aiNotesEnabled = await AwesomeLogger.prompt('confirm', {
-      text: 'Enable AI-generated release notes?',
-      default: 'no',
-    }).result;
-
-    let aiProvider: ResolvedConfig['aiProvider'] | undefined;
     if (aiNotesEnabled) {
       const provider = await AwesomeLogger.prompt('choice', {
         text: 'AI provider?',
@@ -140,17 +183,20 @@ export const initCommand = defineCommand({
       }
     }
 
-    const writeWorkflow = await AwesomeLogger.prompt('confirm', {
-      text: 'Generate GitHub Actions publish workflow?',
-      default: 'yes',
-    }).result;
-
-    let writeChangesetCheck = false;
-    if (changesetsEnabled && enforceInPR) {
-      writeChangesetCheck = await AwesomeLogger.prompt('confirm', {
-        text: 'Generate changeset enforcement workflow?',
+    if (!nonInteractive) {
+      writeWorkflow = await AwesomeLogger.prompt('confirm', {
+        text: 'Generate GitHub Actions publish workflow?',
         default: 'yes',
       }).result;
+
+      if (changesetsEnabled && enforceInPR) {
+        writeChangesetCheck = await AwesomeLogger.prompt('confirm', {
+          text: 'Generate changeset enforcement workflow?',
+          default: 'yes',
+        }).result;
+      } else {
+        writeChangesetCheck = false;
+      }
     }
 
     // --- Build config ---
@@ -163,6 +209,7 @@ export const initCommand = defineCommand({
       github: { releases: { enabled: githubReleasesEnabled, mode: releaseMode, draft: false } },
       aiProvider,
       aiReleaseNotes: { enabled: aiNotesEnabled },
+      ...(provenance ? { provenance: true } : {}),
     };
 
     // --- Write files with checklist progress ---
@@ -179,35 +226,57 @@ export const initCommand = defineCommand({
 
     const checklist = AwesomeLogger.log('checklist', { items, logAllFinalStates: true });
 
-    // Config file
-    checklist.changeState(0, 'inProgress');
-    const configContent = generateConfigFile(config);
-    await writeFile(join(rootDir, 'awesome-publish.config.ts'), configContent);
-    checklist.changeState(0, 'succeeded');
+    // Write a file unless it already exists (unless --force), so re-running
+    // init never silently clobbers a hand-edited config or workflow.
+    const writeGuarded = async (
+      index: number,
+      path: string,
+      label: string,
+      content: string
+    ): Promise<void> => {
+      checklist.changeState(index, 'inProgress');
+      if ((await exists(path)) && !force) {
+        checklist.changeState(index, 'skipped', `${label} (already exists — use --force)`);
+        return;
+      }
+      await writeFile(path, content);
+      checklist.changeState(index, 'succeeded');
+    };
+
+    const ensureWorkflowDir = async (): Promise<string> => {
+      const workflowDir = join(rootDir, '.github', 'workflows');
+      if (!(await exists(workflowDir))) await mkdir(workflowDir, { recursive: true });
+      return workflowDir;
+    };
+
+    await writeGuarded(
+      0,
+      join(rootDir, 'awesome-publish.config.ts'),
+      'awesome-publish.config.ts',
+      generateConfigFile(config)
+    );
 
     let idx = 1;
 
-    // Publish workflow
     if (writeWorkflow) {
-      checklist.changeState(idx, 'inProgress');
-      const workflowDir = join(rootDir, '.github', 'workflows');
-      if (!(await exists(workflowDir))) {
-        await mkdir(workflowDir, { recursive: true });
-      }
-      await writeFile(join(workflowDir, 'publish.yml'), generatePublishWorkflow(pm));
-      checklist.changeState(idx, 'succeeded');
+      const workflowDir = await ensureWorkflowDir();
+      await writeGuarded(
+        idx,
+        join(workflowDir, 'publish.yml'),
+        '.github/workflows/publish.yml',
+        generatePublishWorkflow(pm, { registry: config.registry, provenance })
+      );
       idx++;
     }
 
-    // Changeset check workflow
     if (writeChangesetCheck) {
-      checklist.changeState(idx, 'inProgress');
-      const workflowDir = join(rootDir, '.github', 'workflows');
-      if (!(await exists(workflowDir))) {
-        await mkdir(workflowDir, { recursive: true });
-      }
-      await writeFile(join(workflowDir, 'changeset-check.yml'), generateChangesetCheckWorkflow());
-      checklist.changeState(idx, 'succeeded');
+      const workflowDir = await ensureWorkflowDir();
+      await writeGuarded(
+        idx,
+        join(workflowDir, 'changeset-check.yml'),
+        '.github/workflows/changeset-check.yml',
+        generateChangesetCheckWorkflow()
+      );
     }
 
     checklist.end();

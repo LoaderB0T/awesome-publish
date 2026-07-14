@@ -8,8 +8,13 @@ import { debug } from '../services/debug.js';
 export const consumeChangesetsStep: PipelineStep<ChangesetContext & { rootDir: string }> = {
   name: 'consume-changesets',
   phase: Phases.CONSUME_CHANGESETS,
-  after: [Phases.DETERMINE_VERSION],
-  before: [Phases.BUILD_TEMP_DIR],
+  // Delete changeset files only AFTER a successful publish, but before the
+  // release commit so the deletion is committed. For the `version` command
+  // (no publish step) the PUBLISH_NPM constraint is dropped and this simply
+  // runs before git-commit. This prevents losing version intent when publish
+  // fails partway.
+  after: [Phases.DETERMINE_VERSION, Phases.PUBLISH_NPM],
+  before: [Phases.GIT_COMMIT],
   hasSideEffects: true,
 
   shouldRun: ctx => ctx.changesets?.length > 0 && !(ctx as any).isPrerelease,

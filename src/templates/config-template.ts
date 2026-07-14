@@ -9,6 +9,10 @@ export function generateConfigFile(config: Partial<ResolvedConfig>): string {
     `  stripScripts: ${config.stripScripts ?? true},`,
   ];
 
+  if (config.provenance) {
+    lines.push(`  provenance: true,`);
+  }
+
   if (config.packageManager) {
     lines.push(`  packageManager: '${config.packageManager}',`);
   }
