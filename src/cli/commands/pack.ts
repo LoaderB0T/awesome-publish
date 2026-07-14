@@ -29,7 +29,9 @@ export const packCommand = defineCommand({
     debug('pack', 'package manager', pm);
 
     const rawConfig = await loadConfigFromDir(rootDir);
-    const config = rawConfig ? validateConfig(rawConfig, pm) : validateConfig({ publishFiles: ['lib'], stripScripts: true }, pm);
+    const config = rawConfig
+      ? validateConfig(rawConfig, pm)
+      : validateConfig({ publishFiles: ['lib'], stripScripts: true }, pm);
     debug('pack', 'resolved config', config);
 
     if (config.requireCleanGit && !args['ignore-git']) {
@@ -42,15 +44,23 @@ export const packCommand = defineCommand({
     }
 
     const packages = await resolvePackages(rootDir, config, args.filter);
-    debug('pack', 'resolved packages', packages.map(p => `${p.name}@${p.version}`));
+    debug(
+      'pack',
+      'resolved packages',
+      packages.map(p => `${p.name}@${p.version}`)
+    );
 
     const steps = buildPipeline('pack', config);
-    debug('pack', 'pipeline steps', steps.map(s => s.name));
+    debug(
+      'pack',
+      'pipeline steps',
+      steps.map(s => s.name)
+    );
 
     const ctx = {
       config,
       packages,
-      mode: isCi ? 'ci' as const : 'interactive' as const,
+      mode: isCi ? ('ci' as const) : ('interactive' as const),
       dryRun: args['dry-run'] ?? false,
       debug: args.debug ?? false,
       rootDir,

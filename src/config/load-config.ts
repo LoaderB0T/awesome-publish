@@ -19,7 +19,9 @@ export async function loadConfigFromDir(dir: string): Promise<AwesomePublishConf
       debug('config', 'found config file', configPath);
       try {
         const jiti = createJiti(configPath, { interopDefault: true });
-        const mod = await jiti.import(configPath) as { default?: AwesomePublishConfig } | AwesomePublishConfig;
+        const mod = (await jiti.import(configPath)) as
+          | { default?: AwesomePublishConfig }
+          | AwesomePublishConfig;
         const config = ('default' in mod ? mod.default : mod) as AwesomePublishConfig | undefined;
         debug('config', 'loaded config', config);
         return config;

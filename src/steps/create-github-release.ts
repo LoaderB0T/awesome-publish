@@ -6,18 +6,22 @@ import { GitService } from '../services/git.js';
 import { buildTagName } from './git-tag.js';
 import { debug } from '../services/debug.js';
 
-export const createGithubReleaseStep: PipelineStep<PublishContext & VersionContext & { rootDir: string }, GithubReleaseContext> = {
+export const createGithubReleaseStep: PipelineStep<
+  PublishContext & VersionContext & { rootDir: string },
+  GithubReleaseContext
+> = {
   name: 'github-release',
   phase: Phases.GITHUB_RELEASE,
   after: [Phases.PUBLISH_NPM],
   before: [Phases.CLEANUP],
   hasSideEffects: true,
 
-  shouldRun: (ctx) => ctx.config.github.releases.enabled,
+  shouldRun: ctx => ctx.config.github.releases.enabled && ctx.versionBumps?.size > 0,
 
   async execute(ctx): Promise<GithubReleaseContext> {
     const token = process.env.GITHUB_TOKEN;
-    if (!token) throw new Error('GITHUB_TOKEN environment variable is required for GitHub releases');
+    if (!token)
+      throw new Error('GITHUB_TOKEN environment variable is required for GitHub releases');
 
     const { owner, repo } = await getRepoInfo(ctx.rootDir);
     debug('github-release', `repo: ${owner}/${repo}`);

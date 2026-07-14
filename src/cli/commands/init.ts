@@ -110,9 +110,10 @@ export const initCommand = defineCommand({
 
       const model = await AwesomeLogger.prompt('text', {
         text: 'AI model name?',
-        hints: provider === 'anthropic'
-          ? ['claude-sonnet-4-20250514', 'claude-haiku-4-20250414']
-          : ['gpt-4o', 'gpt-4o-mini'],
+        hints:
+          provider === 'anthropic'
+            ? ['claude-sonnet-4-20250514', 'claude-haiku-4-20250414']
+            : ['gpt-4o', 'gpt-4o-mini'],
         default: provider === 'anthropic' ? 'claude-sonnet-4-20250514' : 'gpt-4o',
         allowOnlyHints: false,
         caseInsensitive: false,
@@ -190,7 +191,7 @@ export const initCommand = defineCommand({
     if (writeWorkflow) {
       checklist.changeState(idx, 'inProgress');
       const workflowDir = join(rootDir, '.github', 'workflows');
-      if (!await exists(workflowDir)) {
+      if (!(await exists(workflowDir))) {
         await mkdir(workflowDir, { recursive: true });
       }
       await writeFile(join(workflowDir, 'publish.yml'), generatePublishWorkflow(pm));
@@ -202,7 +203,7 @@ export const initCommand = defineCommand({
     if (writeChangesetCheck) {
       checklist.changeState(idx, 'inProgress');
       const workflowDir = join(rootDir, '.github', 'workflows');
-      if (!await exists(workflowDir)) {
+      if (!(await exists(workflowDir))) {
         await mkdir(workflowDir, { recursive: true });
       }
       await writeFile(join(workflowDir, 'changeset-check.yml'), generateChangesetCheckWorkflow());

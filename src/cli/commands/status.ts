@@ -12,7 +12,8 @@ import { setDebug, debug } from '../../services/debug.js';
 import type { Changeset } from '../../types/changeset.js';
 
 function parseChangesetFile(filePath: string): Changeset | null {
-  const content = readFileSync(filePath, 'utf-8');
+  // Normalize CRLF so the frontmatter regex matches on Windows-authored files.
+  const content = readFileSync(filePath, 'utf-8').replace(/\r\n/g, '\n');
   const match = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
   if (!match) return null;
 
@@ -29,9 +30,11 @@ function parseChangesetFile(filePath: string): Changeset | null {
   if (releases.length === 0) return null;
 
   // Strip metadata comments from summary
-  const summary = body.split('\n')
+  const summary = body
+    .split('\n')
     .filter(l => !l.match(/^<!--\s*(author|email|timestamp):\s*.+\s*-->$/))
-    .join('\n').trim();
+    .join('\n')
+    .trim();
 
   return { id: basename(filePath, '.md'), summary, releases };
 }
@@ -52,7 +55,11 @@ export const statusCommand = defineCommand({
       : validateConfig({ publishFiles: ['lib'], stripScripts: true }, pm);
 
     const packages = await resolvePackages(rootDir, config);
-    debug('status', 'packages', packages.map(p => p.name));
+    debug(
+      'status',
+      'packages',
+      packages.map(p => p.name)
+    );
 
     const git = new GitService(rootDir);
 
@@ -82,7 +89,9 @@ export const statusCommand = defineCommand({
         if (detected) bumpHint = ` (conventional: ${detected})`;
       }
 
-      console.log(`  ${pkg.name}@${pkg.version}  ${commitCount} commits since ${latestTag ?? 'beginning'}${bumpHint}`);
+      console.log(
+        `  ${pkg.name}@${pkg.version}  ${commitCount} commits since ${latestTag ?? 'beginning'}${bumpHint}`
+      );
     }
 
     // Show pending changesets
@@ -126,7 +135,9 @@ export const statusCommand = defineCommand({
     console.log(`  Changelog: ${config.changelog.enabled ? config.changelog.file : 'disabled'}`);
     console.log(`  Changesets: ${config.changesets.enabled ? 'enabled' : 'disabled'}`);
     console.log(`  Conventional commits: ${config.conventionalCommits ? 'enabled' : 'disabled'}`);
-    console.log(`  GitHub releases: ${config.github.releases.enabled ? `${config.github.releases.mode}${config.github.releases.draft ? ' (draft)' : ''}` : 'disabled'}`);
+    console.log(
+      `  GitHub releases: ${config.github.releases.enabled ? `${config.github.releases.mode}${config.github.releases.draft ? ' (draft)' : ''}` : 'disabled'}`
+    );
     console.log(`  AI release notes: ${config.aiReleaseNotes.enabled ? 'enabled' : 'disabled'}`);
     console.log(`  Confirm before publish: ${config.confirmPublish ? 'yes' : 'no'}`);
     console.log(`  Sync dependencies: ${config.syncDependencies ? 'enabled' : 'disabled'}`);

@@ -21,7 +21,13 @@ function makeCtx(overrides: Record<string, unknown> = {}): CoreContext & Partial
       aiReleaseNotes: { enabled: false },
     },
     packages: [
-      { name: 'pkg-a', version: '1.0.0', dir: '/tmp/a', packageJson: {}, config: {} as ResolvedConfig },
+      {
+        name: 'pkg-a',
+        version: '1.0.0',
+        dir: '/tmp/a',
+        packageJson: {},
+        config: {} as ResolvedConfig,
+      },
     ],
     mode: 'ci' as const,
     dryRun: false,
@@ -32,9 +38,7 @@ function makeCtx(overrides: Record<string, unknown> = {}): CoreContext & Partial
 describe('determineVersionStep', () => {
   it('determines version from changesets', async () => {
     const ctx = makeCtx({
-      changesets: [
-        { id: 'abc', summary: 'feat', releases: [{ name: 'pkg-a', type: 'minor' }] },
-      ],
+      changesets: [{ id: 'abc', summary: 'feat', releases: [{ name: 'pkg-a', type: 'minor' }] }],
     });
     ctx.config.changesets = { enabled: true, enforceInPR: false };
 
@@ -45,6 +49,21 @@ describe('determineVersionStep', () => {
       to: '1.1.0',
       type: 'minor',
     });
+  });
+
+  it('is a no-op (empty bumps) in CI when changesets enabled but none present', async () => {
+    const ctx = makeCtx();
+    ctx.config.changesets = { enabled: true, enforceInPR: false };
+    const result = await determineVersionStep.execute(ctx as any);
+    expect(result.versionBumps.size).toBe(0);
+    expect(result.isPrerelease).toBe(false);
+  });
+
+  it('lets --bump override in CI even when changesets enabled but none present', async () => {
+    const ctx = makeCtx({ cliArgs: { bump: 'patch' } });
+    ctx.config.changesets = { enabled: true, enforceInPR: false };
+    const result = await determineVersionStep.execute(ctx as any);
+    expect(result.versionBumps.get('pkg-a')?.to).toBe('1.0.1');
   });
 
   it('uses --bump arg in CI mode without changesets', async () => {

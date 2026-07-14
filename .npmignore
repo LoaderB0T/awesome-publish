@@ -1,5 +1,6 @@
 src
 .vscode
-.eslintignore
-.eslintrc.json
+.oxlintrc.json
+.oxfmtrc.json
+.editorconfig
 tsconfig.json

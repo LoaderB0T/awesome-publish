@@ -12,7 +12,7 @@ export const consumeChangesetsStep: PipelineStep<ChangesetContext & { rootDir: s
   before: [Phases.BUILD_TEMP_DIR],
   hasSideEffects: true,
 
-  shouldRun: (ctx) => ctx.changesets?.length > 0 && !(ctx as any).isPrerelease,
+  shouldRun: ctx => ctx.changesets?.length > 0 && !(ctx as any).isPrerelease,
 
   async execute(ctx): Promise<void> {
     for (const cs of ctx.changesets) {

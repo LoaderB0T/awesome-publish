@@ -26,7 +26,7 @@ function resolveGlobPatterns(rootDir: string, patterns: string[]): string[] {
 
 function matchesFilter(name: string, filter: string): boolean {
   if (filter.includes('*')) {
-    const regex = new RegExp('^' + filter.replace(/\*/g, '.*') + '$');
+    const regex = new RegExp(`^${filter.replace(/\*/g, '.*')}$`);
     return regex.test(name);
   }
   return name === filter;
@@ -35,7 +35,7 @@ function matchesFilter(name: string, filter: string): boolean {
 export async function resolvePackages(
   rootDir: string,
   rootConfig: ResolvedConfig,
-  filter?: string,
+  filter?: string
 ): Promise<PackageInfo[]> {
   const rootPkg = readPackageJson(rootDir);
   const workspaces = rootPkg.workspaces as string[] | undefined;

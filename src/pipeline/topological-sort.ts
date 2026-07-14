@@ -62,9 +62,7 @@ export function topologicalSort(steps: PipelineStep<any, any>[]): PipelineStep<a
   }
 
   if (sorted.length !== steps.length) {
-    const remaining = steps
-      .filter(s => !sorted.some(r => r.phase === s.phase))
-      .map(s => s.phase);
+    const remaining = steps.filter(s => !sorted.some(r => r.phase === s.phase)).map(s => s.phase);
     throw new Error(`Cycle detected in pipeline phases: ${remaining.join(' → ')}`);
   }
 

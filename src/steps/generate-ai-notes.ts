@@ -9,7 +9,7 @@ import { debug } from '../services/debug.js';
 
 function interpolatePrompt(
   template: string,
-  vars: { package: string; version: string; from: string; commits: string; type: string },
+  vars: { package: string; version: string; from: string; commits: string; type: string }
 ): string {
   return template
     .replace(/\{\{package\}\}/g, vars.package)
@@ -19,14 +19,17 @@ function interpolatePrompt(
     .replace(/\{\{type\}\}/g, vars.type);
 }
 
-export const generateAiNotesStep: PipelineStep<VersionContext & { rootDir: string }, AiNotesContext> = {
+export const generateAiNotesStep: PipelineStep<
+  VersionContext & { rootDir: string },
+  AiNotesContext
+> = {
   name: 'ai-notes-generate',
   phase: Phases.AI_NOTES_GENERATE,
   after: [Phases.DETERMINE_VERSION],
   before: [Phases.PUBLISH_NPM],
   hasSideEffects: false,
 
-  shouldRun: (ctx) => ctx.config.aiReleaseNotes.enabled,
+  shouldRun: ctx => ctx.config.aiReleaseNotes.enabled && ctx.versionBumps?.size > 0,
 
   async execute(ctx): Promise<AiNotesContext> {
     const provider = createAiProvider(ctx.config);
@@ -50,9 +53,7 @@ export const generateAiNotesStep: PipelineStep<VersionContext & { rootDir: strin
       const latestTag = await git.getLatestTag(pkg.name);
       debug('ai-notes-generate', `${pkg.name}: latest tag`, latestTag ?? 'none');
 
-      const commits = latestTag
-        ? await git.getCommitsSinceTag(latestTag)
-        : [];
+      const commits = latestTag ? await git.getCommitsSinceTag(latestTag) : [];
       debug('ai-notes-generate', `${pkg.name}: ${commits.length} commits since tag`);
 
       const commitList = commits.map(c => `- ${c.message}`).join('\n');

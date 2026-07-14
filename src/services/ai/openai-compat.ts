@@ -4,7 +4,7 @@ export class OpenAiCompatProvider implements AiProvider {
   constructor(
     private readonly model: string,
     private readonly apiKey: string,
-    private readonly baseUrl: string,
+    private readonly baseUrl: string
   ) {}
 
   async generateText(prompt: string): Promise<string> {
@@ -25,7 +25,7 @@ export class OpenAiCompatProvider implements AiProvider {
       throw new Error(`AI API error ${response.status}: ${text}`);
     }
 
-    const data = await response.json() as { choices: { message: { content: string } }[] };
+    const data = (await response.json()) as { choices: { message: { content: string } }[] };
     return data.choices[0]?.message?.content ?? '';
   }
 }

@@ -1,6 +1,9 @@
 import type { ResolvedConfig } from '../types/config.js';
 
-export const DEFAULT_CONFIG: Omit<ResolvedConfig, 'packageManager' | 'publishFiles' | 'stripScripts'> = {
+export const DEFAULT_CONFIG: Omit<
+  ResolvedConfig,
+  'packageManager' | 'publishFiles' | 'stripScripts'
+> = {
   registry: 'https://registry.npmjs.org',
   requireCleanGit: true,
   gitTag: { enabled: true, prefix: '' },

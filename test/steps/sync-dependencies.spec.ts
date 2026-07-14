@@ -28,13 +28,21 @@ describe('syncDependenciesStep', () => {
     const dirA = mkdtempSync(join(tmpdir(), 'ap-sync-a-'));
     const dirB = mkdtempSync(join(tmpdir(), 'ap-sync-b-'));
 
-    writeFileSync(join(dirA, 'package.json'), JSON.stringify({
-      name: 'pkg-a', version: '1.0.0',
-    }));
-    writeFileSync(join(dirB, 'package.json'), JSON.stringify({
-      name: 'pkg-b', version: '2.0.0',
-      dependencies: { 'pkg-a': '^1.0.0' },
-    }));
+    writeFileSync(
+      join(dirA, 'package.json'),
+      JSON.stringify({
+        name: 'pkg-a',
+        version: '1.0.0',
+      })
+    );
+    writeFileSync(
+      join(dirB, 'package.json'),
+      JSON.stringify({
+        name: 'pkg-b',
+        version: '2.0.0',
+        dependencies: { 'pkg-a': '^1.0.0' },
+      })
+    );
 
     const config = makeConfig();
     const ctx = {
@@ -62,10 +70,14 @@ describe('syncDependenciesStep', () => {
     const dirB = mkdtempSync(join(tmpdir(), 'ap-sync-b-'));
 
     writeFileSync(join(dirA, 'package.json'), JSON.stringify({ name: 'pkg-a', version: '1.0.0' }));
-    writeFileSync(join(dirB, 'package.json'), JSON.stringify({
-      name: 'pkg-b', version: '2.0.0',
-      dependencies: { 'pkg-a': 'workspace:*' },
-    }));
+    writeFileSync(
+      join(dirB, 'package.json'),
+      JSON.stringify({
+        name: 'pkg-b',
+        version: '2.0.0',
+        dependencies: { 'pkg-a': 'workspace:*' },
+      })
+    );
 
     const config = makeConfig();
     const ctx = {
@@ -93,10 +105,14 @@ describe('syncDependenciesStep', () => {
     const dirB = mkdtempSync(join(tmpdir(), 'ap-sync-b-'));
 
     writeFileSync(join(dirA, 'package.json'), JSON.stringify({ name: 'pkg-a', version: '1.0.0' }));
-    writeFileSync(join(dirB, 'package.json'), JSON.stringify({
-      name: 'pkg-b', version: '2.0.0',
-      dependencies: { 'pkg-a': '~1.0.0' },
-    }));
+    writeFileSync(
+      join(dirB, 'package.json'),
+      JSON.stringify({
+        name: 'pkg-b',
+        version: '2.0.0',
+        dependencies: { 'pkg-a': '~1.0.0' },
+      })
+    );
 
     const config = makeConfig();
     const ctx = {

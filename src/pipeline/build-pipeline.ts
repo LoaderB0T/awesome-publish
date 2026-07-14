@@ -9,6 +9,7 @@ import { buildTempDirStep } from '../steps/build-temp-dir.js';
 import { modifyPackageJsonStep } from '../steps/modify-package-json.js';
 import { publishNpmStep } from '../steps/publish-npm.js';
 import { packLocalStep } from '../steps/pack-local.js';
+import { gitCommitStep } from '../steps/git-commit.js';
 import { gitTagStep } from '../steps/git-tag.js';
 import { cleanupStep } from '../steps/cleanup.js';
 import { readChangesetsStep } from '../steps/read-changesets.js';
@@ -19,7 +20,10 @@ import { createGithubReleaseStep } from '../steps/create-github-release.js';
 
 export type Command = 'publish' | 'pack' | 'version';
 
-function getCoreFeaturesForCommand(command: Command, config: ResolvedConfig): PipelineStep<any, any>[] {
+function getCoreFeaturesForCommand(
+  command: Command,
+  config: ResolvedConfig
+): PipelineStep<any, any>[] {
   const steps: PipelineStep<any, any>[] = [determineVersionStep];
 
   if (command === 'publish') {
@@ -38,7 +42,7 @@ function getCoreFeaturesForCommand(command: Command, config: ResolvedConfig): Pi
 
   switch (command) {
     case 'publish':
-      steps.push(buildTempDirStep, modifyPackageJsonStep, publishNpmStep);
+      steps.push(buildTempDirStep, modifyPackageJsonStep, publishNpmStep, gitCommitStep);
       if (config.gitTag.enabled) steps.push(gitTagStep);
       steps.push(cleanupStep);
       break;
@@ -46,6 +50,7 @@ function getCoreFeaturesForCommand(command: Command, config: ResolvedConfig): Pi
       steps.push(buildTempDirStep, modifyPackageJsonStep, packLocalStep, cleanupStep);
       break;
     case 'version':
+      steps.push(gitCommitStep);
       if (config.gitTag.enabled) steps.push(gitTagStep);
       steps.push(cleanupStep);
       break;
@@ -67,7 +72,8 @@ export function buildPipeline(command: Command, config: ResolvedConfig): Pipelin
   if (command === 'publish') {
     if (config.aiReleaseNotes.enabled) steps.push(generateAiNotesStep);
     if (config.github.releases.enabled) steps.push(createGithubReleaseStep);
-    if (config.aiReleaseNotes.enabled && config.github.releases.enabled) steps.push(aiNotesPublishStep);
+    if (config.aiReleaseNotes.enabled && config.github.releases.enabled)
+      steps.push(aiNotesPublishStep);
   }
 
   return steps;

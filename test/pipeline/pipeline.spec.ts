@@ -22,14 +22,17 @@ function makeContext(overrides: Partial<CoreContext> = {}): CoreContext {
   };
 }
 
-function fakeStep(name: string, opts: {
-  phase?: string;
-  after?: string[];
-  before?: string[];
-  hasSideEffects?: boolean;
-  shouldRun?: () => boolean;
-  execute?: (ctx: any) => Promise<any>;
-} = {}): PipelineStep<any, any> {
+function fakeStep(
+  name: string,
+  opts: {
+    phase?: string;
+    after?: string[];
+    before?: string[];
+    hasSideEffects?: boolean;
+    shouldRun?: () => boolean;
+    execute?: (ctx: any) => Promise<any>;
+  } = {}
+): PipelineStep<any, any> {
   return {
     name,
     phase: (opts.phase ?? name) as any,
@@ -45,8 +48,17 @@ describe('runPipeline', () => {
   it('executes steps in sorted order', async () => {
     const order: string[] = [];
     const steps = [
-      fakeStep('b', { after: ['a'], execute: async () => { order.push('b'); } }),
-      fakeStep('a', { execute: async () => { order.push('a'); } }),
+      fakeStep('b', {
+        after: ['a'],
+        execute: async () => {
+          order.push('b');
+        },
+      }),
+      fakeStep('a', {
+        execute: async () => {
+          order.push('a');
+        },
+      }),
     ];
 
     await runPipeline(steps, makeContext());
@@ -56,11 +68,17 @@ describe('runPipeline', () => {
   it('skips steps where shouldRun returns false', async () => {
     const executed: string[] = [];
     const steps = [
-      fakeStep('a', { execute: async () => { executed.push('a'); } }),
+      fakeStep('a', {
+        execute: async () => {
+          executed.push('a');
+        },
+      }),
       fakeStep('b', {
         after: ['a'],
         shouldRun: () => false,
-        execute: async () => { executed.push('b'); },
+        execute: async () => {
+          executed.push('b');
+        },
       }),
     ];
 
@@ -71,11 +89,17 @@ describe('runPipeline', () => {
   it('skips side-effect steps in dry run', async () => {
     const executed: string[] = [];
     const steps = [
-      fakeStep('a', { execute: async () => { executed.push('a'); } }),
+      fakeStep('a', {
+        execute: async () => {
+          executed.push('a');
+        },
+      }),
       fakeStep('b', {
         after: ['a'],
         hasSideEffects: true,
-        execute: async () => { executed.push('b'); },
+        execute: async () => {
+          executed.push('b');
+        },
       }),
     ];
 
@@ -104,7 +128,9 @@ describe('runPipeline', () => {
       fakeStep('a', { execute: async () => {} }),
       fakeStep('b', {
         after: ['a'],
-        execute: async () => { throw new Error('publish failed'); },
+        execute: async () => {
+          throw new Error('publish failed');
+        },
       }),
       fakeStep('c', { after: ['b'], execute: async () => {} }),
     ];

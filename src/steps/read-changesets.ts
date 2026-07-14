@@ -25,7 +25,8 @@ function parseMetaComments(body: string): { meta: ChangesetMeta; summary: string
 }
 
 function parseChangesetFile(filePath: string): Changeset | null {
-  const content = readFileSync(filePath, 'utf-8');
+  // Normalize CRLF so the frontmatter regex matches on Windows-authored files.
+  const content = readFileSync(filePath, 'utf-8').replace(/\r\n/g, '\n');
   const match = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
   if (!match) return null;
 
@@ -57,7 +58,7 @@ export const readChangesetsStep: PipelineStep<{ rootDir: string }, ChangesetCont
   after: [],
   before: [Phases.DETERMINE_VERSION],
 
-  shouldRun: (ctx) => ctx.config.changesets.enabled,
+  shouldRun: ctx => ctx.config.changesets.enabled,
 
   async execute(ctx): Promise<ChangesetContext> {
     const changesetDir = join(ctx.rootDir, '.changeset');
@@ -68,9 +69,7 @@ export const readChangesetsStep: PipelineStep<{ rootDir: string }, ChangesetCont
       return { changesets: [] };
     }
 
-    const files = readdirSync(changesetDir).filter(
-      (f) => f.endsWith('.md') && f !== 'README.md',
-    );
+    const files = readdirSync(changesetDir).filter(f => f.endsWith('.md') && f !== 'README.md');
     debug('read-changesets', 'found changeset files', files);
 
     const changesets: Changeset[] = [];

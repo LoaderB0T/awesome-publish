@@ -6,7 +6,7 @@ import type { VersionContext, ChangesetContext, ChangelogContext } from '../pipe
 import type { Changeset } from '../types/changeset.js';
 import type { VersionBump } from '../types/package-info.js';
 import { GitService } from '../services/git.js';
-import { groupCommitsByType, parseConventionalCommit } from '../services/conventional-commits.js';
+import { groupCommitsByType } from '../services/conventional-commits.js';
 import { debug } from '../services/debug.js';
 
 const TYPE_HEADERS: Record<string, string> = {
@@ -31,7 +31,7 @@ function buildChangelogEntry(
   bump: VersionBump,
   changesets: Changeset[] | undefined,
   commits: { hash: string; message: string }[],
-  isMultiPackage: boolean,
+  isMultiPackage: boolean
 ): string {
   const lines: string[] = [];
   const heading = isMultiPackage
@@ -41,9 +41,7 @@ function buildChangelogEntry(
   lines.push('');
 
   // Changeset summaries
-  const pkgChangesets = changesets?.filter(cs =>
-    cs.releases.some(r => r.name === pkg.name),
-  );
+  const pkgChangesets = changesets?.filter(cs => cs.releases.some(r => r.name === pkg.name));
   if (pkgChangesets?.length) {
     for (const cs of pkgChangesets) {
       lines.push(`- ${cs.summary}`);
@@ -92,7 +90,7 @@ export const writeChangelogStep: PipelineStep<
   before: [Phases.BUILD_TEMP_DIR],
   hasSideEffects: true,
 
-  shouldRun: (ctx) => ctx.config.changelog.enabled && ctx.versionBumps?.size > 0 && !ctx.isPrerelease,
+  shouldRun: ctx => ctx.config.changelog.enabled && ctx.versionBumps?.size > 0 && !ctx.isPrerelease,
 
   async execute(ctx): Promise<ChangelogContext> {
     const git = new GitService(ctx.rootDir);
@@ -105,10 +103,11 @@ export const writeChangelogStep: PipelineStep<
       if (!bump) continue;
 
       const latestTag = await git.getLatestTag(pkg.name);
-      const commits = latestTag
-        ? await git.getCommitsSinceTag(latestTag)
-        : [];
-      debug('write-changelog', `${pkg.name}: ${commits.length} commits since ${latestTag ?? 'beginning'}`);
+      const commits = latestTag ? await git.getCommitsSinceTag(latestTag) : [];
+      debug(
+        'write-changelog',
+        `${pkg.name}: ${commits.length} commits since ${latestTag ?? 'beginning'}`
+      );
 
       const entry = buildChangelogEntry(pkg, bump, changesets, commits, isMultiPackage);
       changelogEntries.set(pkg.name, entry);

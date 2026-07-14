@@ -4,23 +4,23 @@ A CLI tool for effortless npm package publishing with quality-of-life features: 
 
 ## Decisions
 
-| Decision | Choice | Rationale |
-|---|---|---|
-| CLI parser | citty | ESM-native, built-in subcommands, TypeScript-first, UnJS ecosystem |
-| Changeset format | @changesets/cli compatible | Zero migration for existing users |
-| AI providers | Anthropic + OpenAI-compatible | Config-driven provider, both supported |
-| Publish mechanism | Temp directory | Original files never touched, cleanest isolation |
-| Init wizard scope | Config + CI workflow + changeset PR enforcement | Full setup in one command |
-| Monorepo support | From v1, auto-detect workspaces | pnpm-workspace.yaml / package.json workspaces |
-| JSR | Skipped for v1 | npm only |
-| GitHub releases | Configurable per-package or combined | User chooses in config |
-| Architecture | Pipeline with dependency-based step ordering | Features register steps with before/after constraints |
-| Pipeline execution | Single run, steps loop over packages internally | Enables cross-package operations like combined releases |
-| Error strategy | Fail fast, report state | Log succeeded/failed/skipped packages |
-| TS config loading | jiti | UnJS ecosystem, zero-config, handles ESM |
-| GitHub API | Plain fetch | Minimal deps, REST API is simple enough |
-| Pack output | Default `./awesome-publish-pack/` with `--out` override | Simple default, flexible when needed |
-| Git clean check | Configurable in config, `--ignore-git` CLI override | Default requires clean tree |
+| Decision           | Choice                                                  | Rationale                                                          |
+| ------------------ | ------------------------------------------------------- | ------------------------------------------------------------------ |
+| CLI parser         | citty                                                   | ESM-native, built-in subcommands, TypeScript-first, UnJS ecosystem |
+| Changeset format   | @changesets/cli compatible                              | Zero migration for existing users                                  |
+| AI providers       | Anthropic + OpenAI-compatible                           | Config-driven provider, both supported                             |
+| Publish mechanism  | Temp directory                                          | Original files never touched, cleanest isolation                   |
+| Init wizard scope  | Config + CI workflow + changeset PR enforcement         | Full setup in one command                                          |
+| Monorepo support   | From v1, auto-detect workspaces                         | pnpm-workspace.yaml / package.json workspaces                      |
+| JSR                | Skipped for v1                                          | npm only                                                           |
+| GitHub releases    | Configurable per-package or combined                    | User chooses in config                                             |
+| Architecture       | Pipeline with dependency-based step ordering            | Features register steps with before/after constraints              |
+| Pipeline execution | Single run, steps loop over packages internally         | Enables cross-package operations like combined releases            |
+| Error strategy     | Fail fast, report state                                 | Log succeeded/failed/skipped packages                              |
+| TS config loading  | jiti                                                    | UnJS ecosystem, zero-config, handles ESM                           |
+| GitHub API         | Plain fetch                                             | Minimal deps, REST API is simple enough                            |
+| Pack output        | Default `./awesome-publish-pack/` with `--out` override | Simple default, flexible when needed                               |
+| Git clean check    | Configurable in config, `--ignore-git` CLI override     | Default requires clean tree                                        |
 
 ## 1. Core Types
 
@@ -28,11 +28,11 @@ A CLI tool for effortless npm package publishing with quality-of-life features: 
 
 ```ts
 interface PackageInfo {
-  name: string;               // e.g., "@scope/my-pkg"
-  version: string;            // current version from package.json
-  dir: string;                // absolute path to package directory
+  name: string; // e.g., "@scope/my-pkg"
+  version: string; // current version from package.json
+  dir: string; // absolute path to package directory
   packageJson: Record<string, unknown>;
-  config: ResolvedConfig;     // resolved config (package-level or root fallback)
+  config: ResolvedConfig; // resolved config (package-level or root fallback)
 }
 ```
 
@@ -42,10 +42,10 @@ Compatible with @changesets/cli format. Each `.changeset/*.md` file produces one
 
 ```ts
 interface Changeset {
-  id: string;                 // filename without extension
-  summary: string;            // markdown body of the changeset file
+  id: string; // filename without extension
+  summary: string; // markdown body of the changeset file
   releases: {
-    name: string;             // package name
+    name: string; // package name
     type: 'patch' | 'minor' | 'major';
   }[];
 }
@@ -56,8 +56,8 @@ interface Changeset {
 ```ts
 interface VersionBump {
   packageName: string;
-  from: string;               // e.g., "1.2.0"
-  to: string;                 // e.g., "1.3.0"
+  from: string; // e.g., "1.2.0"
+  to: string; // e.g., "1.3.0"
   type: 'patch' | 'minor' | 'major';
 }
 ```
@@ -67,8 +67,8 @@ interface VersionBump {
 ```ts
 interface PublishResult {
   packageName: string;
-  version: string;            // published version
-  registry: string;           // registry URL
+  version: string; // published version
+  registry: string; // registry URL
   status: 'published' | 'skipped-already-exists';
 }
 ```
@@ -169,7 +169,7 @@ interface AwesomePublishConfig {
   // Changeset configuration
   changesets?: {
     enabled: boolean;
-    enforceInPR?: boolean;  // generate GH action for PR enforcement
+    enforceInPR?: boolean; // generate GH action for PR enforcement
   };
 
   // GitHub integration
@@ -184,15 +184,17 @@ interface AwesomePublishConfig {
   aiProvider?: {
     provider: 'anthropic' | 'openai-compatible';
     model: string;
-    baseUrl?: string;  // for openai-compatible
+    baseUrl?: string; // for openai-compatible
     // API key read from env: AWESOME_PUBLISH_AI_KEY
   };
 
   // AI features (each validates aiProvider is configured when enabled)
-  aiReleaseNotes?: boolean | {
-    enabled: boolean;
-    customPromptFile?: string;  // path to custom prompt markdown
-  };
+  aiReleaseNotes?:
+    | boolean
+    | {
+        enabled: boolean;
+        customPromptFile?: string; // path to custom prompt markdown
+      };
   // Future: aiChangelog, aiPrDescription, etc.
 }
 ```
@@ -203,10 +205,10 @@ interface AwesomePublishConfig {
 
 ```ts
 interface ResolvedConfig {
-  packageManager: 'npm' | 'yarn' | 'pnpm';       // auto-detected if omitted
-  publishFiles: string[];                           // required, non-empty
+  packageManager: 'npm' | 'yarn' | 'pnpm'; // auto-detected if omitted
+  publishFiles: string[]; // required, non-empty
   stripScripts: boolean | string[];
-  requireCleanGit: boolean;                         // default: true
+  requireCleanGit: boolean; // default: true
   changesets: { enabled: boolean; enforceInPR: boolean };
   github: { releases: { enabled: boolean; mode: 'per-package' | 'combined' } };
   aiProvider?: { provider: 'anthropic' | 'openai-compatible'; model: string; baseUrl?: string };
@@ -226,6 +228,7 @@ During config loading, shorthand forms are normalized to `ResolvedConfig`:
 - `packageManager` auto-detected from lockfile if omitted
 
 Validation checks:
+
 - If any AI feature is enabled, `aiProvider` must be present
 - `publishFiles` must be non-empty
 - `github.releases.mode` must be `'per-package'` or `'combined'`
@@ -251,7 +254,7 @@ export const Phases = {
   CLEANUP: 'cleanup',
 } as const;
 
-export type Phase = typeof Phases[keyof typeof Phases];
+export type Phase = (typeof Phases)[keyof typeof Phases];
 ```
 
 ### Step interface
@@ -264,7 +267,7 @@ interface PipelineStep<TRead = unknown, TWrite = void> {
   phase: Phase;
   after: Phase[];
   before: Phase[];
-  hasSideEffects?: boolean;  // skipped in dry run
+  hasSideEffects?: boolean; // skipped in dry run
   shouldRun(ctx: CoreContext & TRead): boolean | Promise<boolean>;
   execute(ctx: CoreContext & TRead): Promise<TWrite>;
 }
@@ -279,18 +282,30 @@ Core context is populated before the pipeline starts. `packages` is resolved by 
 ```ts
 interface CoreContext {
   config: ResolvedConfig;
-  packages: PackageInfo[];    // resolved before pipeline starts
+  packages: PackageInfo[]; // resolved before pipeline starts
   mode: 'interactive' | 'ci';
   dryRun: boolean;
 }
 
 // Feature-specific context slices (contributed by steps)
-interface ChangesetContext { changesets: Changeset[]; }
-interface VersionContext { versionBumps: Map<string, VersionBump>; }
-interface TempDirContext { tempDirs: Map<string, string>; }
-interface AiNotesContext { releaseNotes: Map<string, string>; }
-interface PublishContext { publishResults: Map<string, PublishResult>; }
-interface GithubReleaseContext { releaseIds: Map<string, number>; } // packageName or 'combined' → GH release ID
+interface ChangesetContext {
+  changesets: Changeset[];
+}
+interface VersionContext {
+  versionBumps: Map<string, VersionBump>;
+}
+interface TempDirContext {
+  tempDirs: Map<string, string>;
+}
+interface AiNotesContext {
+  releaseNotes: Map<string, string>;
+}
+interface PublishContext {
+  publishResults: Map<string, PublishResult>;
+}
+interface GithubReleaseContext {
+  releaseIds: Map<string, number>;
+} // packageName or 'combined' → GH release ID
 ```
 
 Each step's `execute` returns its context contribution (or `void`). The pipeline runner merges non-void returns into the accumulated context object via `Object.assign`.
@@ -314,13 +329,14 @@ Each feature is a module exporting its steps. Features register based on config 
 
 **Per-command step sets:**
 
-| Command | Core features | Optional features |
-|---|---|---|
+| Command   | Core features                                                          | Optional features                                         |
+| --------- | ---------------------------------------------------------------------- | --------------------------------------------------------- |
 | `publish` | determineVersion, buildTempDir, modifyPackageJson, publishNpm, cleanup | readChangesets, consumeChangesets, aiNotes, githubRelease |
-| `pack` | determineVersion, buildTempDir, modifyPackageJson, packLocal, cleanup | readChangesets |
-| `version` | determineVersion, cleanup | readChangesets, consumeChangesets |
+| `pack`    | determineVersion, buildTempDir, modifyPackageJson, packLocal, cleanup  | readChangesets                                            |
+| `version` | determineVersion, cleanup                                              | readChangesets, consumeChangesets                         |
 
 The changeset feature is split into two independent features:
+
 - **readChangesets**: reads `.changeset/` files into `ChangesetContext`. Registered when `config.changesets.enabled`.
 - **consumeChangesets**: deletes consumed changeset files after version bumps. Registered when `config.changesets.enabled` AND command is `publish` or `version`. Has `after: [Phases.DETERMINE_VERSION]`. Its `shouldRun` checks that `ChangesetContext` is populated (no-op if no changesets were read).
 
@@ -374,18 +390,19 @@ read-changesets
 
 ### Commands
 
-| Command | Purpose | Modes |
-|---|---|---|
-| `awesome-publish init` | Config wizard, CI templates, changeset enforcement | Interactive only |
-| `awesome-publish publish` | Full publish pipeline | Interactive, CI |
-| `awesome-publish pack` | Build temp dir, pack locally, no publish | Interactive, CI |
-| `awesome-publish version` | Bump versions only, no publish | Interactive, CI |
+| Command                   | Purpose                                            | Modes            |
+| ------------------------- | -------------------------------------------------- | ---------------- |
+| `awesome-publish init`    | Config wizard, CI templates, changeset enforcement | Interactive only |
+| `awesome-publish publish` | Full publish pipeline                              | Interactive, CI  |
+| `awesome-publish pack`    | Build temp dir, pack locally, no publish           | Interactive, CI  |
+| `awesome-publish version` | Bump versions only, no publish                     | Interactive, CI  |
 
 ### Mode detection
 
 CI mode activates via `--ci` flag or auto-detection of CI environment variables (`CI=true`, `GITHUB_ACTIONS=true`, etc.).
 
 In CI mode:
+
 - No interactive prompts — all inputs via CLI args or changesets
 - If changesets enabled: version bumps derived from changeset files
 - If changesets disabled: `--bump=patch|minor|major` required, error if missing
@@ -427,6 +444,7 @@ In CI mode:
 The `--filter` flag matches against **package names** (not directory paths). Supports glob patterns: `--filter="@scope/*"`, `--filter="my-pkg"`.
 
 Filtering is applied during package resolution (before the pipeline starts). Only matched packages enter `CoreContext.packages`. Consequences:
+
 - Changeset resolution still reads all changesets but only applies bumps to filtered packages
 - Combined GitHub releases only include filtered packages (release body notes which packages were included)
 - If a filtered package has no changeset (changesets enabled), same behavior as unfiltered: interactive prompts for manual bump, CI errors
@@ -461,6 +479,7 @@ Uses `child_process.execFile` — no shell invocation, safe across platforms.
 Auto-detect from lockfile: `pnpm-lock.yaml` → pnpm, `yarn.lock` → yarn, `package-lock.json` → npm. Config override takes precedence.
 
 Uniform interface with per-PM adapters:
+
 - `publish(dir, tag?)`
 - `pack(dir, outDir)`
 
@@ -491,6 +510,7 @@ interface AiProvider {
 ```
 
 Two implementations:
+
 - `anthropic.ts` — uses `@anthropic-ai/sdk`
 - `openai-compat.ts` — plain `fetch` to configurable `baseUrl`
 
@@ -510,13 +530,13 @@ API key from `AWESOME_PUBLISH_AI_KEY` env var.
 
 ### Error categories
 
-| Category | Example | Behavior |
-|---|---|---|
-| Config error | Missing `aiProvider` with AI feature enabled | Fail before pipeline starts. Clear message with fix instructions. |
-| Precondition error | Dirty git tree, missing auth token | Fail early in step. Name the precondition. |
-| Partial publish | Package A published, package B fails | Stop immediately. Log succeeded/failed/skipped. Preserve temp dirs. |
-| Network error | Registry down, GitHub API 500 | No retry. Fail with original error. |
-| User abort | Ctrl+C during prompt | Cleanup temp dirs via process signal handlers. |
+| Category           | Example                                      | Behavior                                                            |
+| ------------------ | -------------------------------------------- | ------------------------------------------------------------------- |
+| Config error       | Missing `aiProvider` with AI feature enabled | Fail before pipeline starts. Clear message with fix instructions.   |
+| Precondition error | Dirty git tree, missing auth token           | Fail early in step. Name the precondition.                          |
+| Partial publish    | Package A published, package B fails         | Stop immediately. Log succeeded/failed/skipped. Preserve temp dirs. |
+| Network error      | Registry down, GitHub API 500                | No retry. Fail with original error.                                 |
+| User abort         | Ctrl+C during prompt                         | Cleanup temp dirs via process signal handlers.                      |
 
 ### Edge cases
 
@@ -560,14 +580,14 @@ test/
 
 ### Approach by layer
 
-| Layer | Strategy |
-|---|---|
-| Pipeline engine | Unit test with fake steps. Verify ordering, dry run skip, fail-fast. |
-| Steps | Unit test. Inject services via context. Assert context output from fixtures. |
-| Services | Unit test against fixtures. Git service uses temp repos. Workspace uses fixture dirs. |
-| GitHub / AI | Mock `fetch` at network boundary. Verify request shape, handle errors. |
-| Config loading | Integration test with real config files in fixtures, loaded via jiti. |
-| CLI commands | Minimal — verify arg parsing and pipeline assembly. |
+| Layer           | Strategy                                                                              |
+| --------------- | ------------------------------------------------------------------------------------- |
+| Pipeline engine | Unit test with fake steps. Verify ordering, dry run skip, fail-fast.                  |
+| Steps           | Unit test. Inject services via context. Assert context output from fixtures.          |
+| Services        | Unit test against fixtures. Git service uses temp repos. Workspace uses fixture dirs. |
+| GitHub / AI     | Mock `fetch` at network boundary. Verify request shape, handle errors.                |
+| Config loading  | Integration test with real config files in fixtures, loaded via jiti.                 |
+| CLI commands    | Minimal — verify arg parsing and pipeline assembly.                                   |
 
 ### Principles
 
@@ -577,13 +597,13 @@ test/
 
 ## 9. Dependencies
 
-| Package | Purpose |
-|---|---|
-| citty | CLI framework, subcommands, arg parsing |
-| awesome-logging | Logging, interactive prompts, spinners |
-| jiti | Runtime TS/ESM config loading |
-| @anthropic-ai/sdk | Anthropic AI provider |
-| vitest | Test runner (devDependency) |
+| Package           | Purpose                                 |
+| ----------------- | --------------------------------------- |
+| citty             | CLI framework, subcommands, arg parsing |
+| awesome-logging   | Logging, interactive prompts, spinners  |
+| jiti              | Runtime TS/ESM config loading           |
+| @anthropic-ai/sdk | Anthropic AI provider                   |
+| vitest            | Test runner (devDependency)             |
 
 All other functionality (git, GitHub API, npm publish) uses Node.js built-ins (`child_process`, `fetch`, `fs`).
 

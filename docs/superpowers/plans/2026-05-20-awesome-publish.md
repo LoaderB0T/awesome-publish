@@ -15,6 +15,7 @@
 ## Task 1: Project Scaffolding
 
 **Files:**
+
 - Modify: `package.json`
 - Modify: `tsconfig.base.json`
 - Modify: `tsconfig.json`
@@ -109,6 +110,7 @@ git commit -m "feat: scaffold project with dependencies and bin entry"
 ## Task 2: Core Types
 
 **Files:**
+
 - Create: `src/types/config.ts`
 - Create: `src/types/package-info.ts`
 - Create: `src/types/changeset.ts`
@@ -138,10 +140,12 @@ export interface AwesomePublishConfig {
     model: string;
     baseUrl?: string;
   };
-  aiReleaseNotes?: boolean | {
-    enabled: boolean;
-    customPromptFile?: string;
-  };
+  aiReleaseNotes?:
+    | boolean
+    | {
+        enabled: boolean;
+        customPromptFile?: string;
+      };
 }
 
 export interface ResolvedConfig {
@@ -218,6 +222,7 @@ git commit -m "feat: add core type definitions"
 ## Task 3: Pipeline Engine — Phases & Step Interface
 
 **Files:**
+
 - Create: `src/pipeline/phases.ts`
 - Create: `src/pipeline/step.ts`
 - Create: `src/pipeline/context.ts`
@@ -325,6 +330,7 @@ git commit -m "feat: add pipeline phases, step interface, and context types"
 ## Task 4: Pipeline Engine — Topological Sort
 
 **Files:**
+
 - Create: `src/pipeline/topological-sort.ts`
 - Create: `test/pipeline/topological-sort.spec.ts`
 
@@ -351,49 +357,32 @@ function fakeStep(phase: string, after: string[] = [], before: string[] = []): P
 
 describe('topologicalSort', () => {
   it('returns steps in dependency order', () => {
-    const steps = [
-      fakeStep('c', ['b']),
-      fakeStep('a'),
-      fakeStep('b', ['a']),
-    ];
+    const steps = [fakeStep('c', ['b']), fakeStep('a'), fakeStep('b', ['a'])];
     const sorted = topologicalSort(steps);
     const names = sorted.map(s => s.name);
     expect(names).toEqual(['a', 'b', 'c']);
   });
 
   it('handles before constraints', () => {
-    const steps = [
-      fakeStep('cleanup', [], []),
-      fakeStep('publish', [], ['cleanup']),
-    ];
+    const steps = [fakeStep('cleanup', [], []), fakeStep('publish', [], ['cleanup'])];
     const sorted = topologicalSort(steps);
     const names = sorted.map(s => s.name);
     expect(names.indexOf('publish')).toBeLessThan(names.indexOf('cleanup'));
   });
 
   it('ignores missing phase references', () => {
-    const steps = [
-      fakeStep('b', ['nonexistent']),
-      fakeStep('a'),
-    ];
+    const steps = [fakeStep('b', ['nonexistent']), fakeStep('a')];
     const sorted = topologicalSort(steps);
     expect(sorted).toHaveLength(2);
   });
 
   it('throws on circular dependency', () => {
-    const steps = [
-      fakeStep('a', ['b']),
-      fakeStep('b', ['a']),
-    ];
+    const steps = [fakeStep('a', ['b']), fakeStep('b', ['a'])];
     expect(() => topologicalSort(steps)).toThrow(/cycle/i);
   });
 
   it('preserves insertion order for independent steps', () => {
-    const steps = [
-      fakeStep('x'),
-      fakeStep('y'),
-      fakeStep('z'),
-    ];
+    const steps = [fakeStep('x'), fakeStep('y'), fakeStep('z')];
     const sorted = topologicalSort(steps);
     const names = sorted.map(s => s.name);
     expect(names).toEqual(['x', 'y', 'z']);
@@ -475,9 +464,7 @@ export function topologicalSort(steps: PipelineStep<any, any>[]): PipelineStep<a
   }
 
   if (sorted.length !== steps.length) {
-    const remaining = steps
-      .filter(s => !sorted.some(r => r.phase === s.phase))
-      .map(s => s.phase);
+    const remaining = steps.filter(s => !sorted.some(r => r.phase === s.phase)).map(s => s.phase);
     throw new Error(`Cycle detected in pipeline phases: ${remaining.join(' → ')}`);
   }
 
@@ -502,6 +489,7 @@ git commit -m "feat: implement pipeline topological sort with tests"
 ## Task 5: Pipeline Engine — Runner
 
 **Files:**
+
 - Create: `src/pipeline/pipeline.ts`
 - Create: `test/pipeline/pipeline.spec.ts`
 
@@ -534,14 +522,17 @@ function makeContext(overrides: Partial<CoreContext> = {}): CoreContext {
   };
 }
 
-function fakeStep(name: string, opts: {
-  phase?: string;
-  after?: string[];
-  before?: string[];
-  hasSideEffects?: boolean;
-  shouldRun?: () => boolean;
-  execute?: (ctx: any) => Promise<any>;
-} = {}): PipelineStep<any, any> {
+function fakeStep(
+  name: string,
+  opts: {
+    phase?: string;
+    after?: string[];
+    before?: string[];
+    hasSideEffects?: boolean;
+    shouldRun?: () => boolean;
+    execute?: (ctx: any) => Promise<any>;
+  } = {}
+): PipelineStep<any, any> {
   return {
     name,
     phase: (opts.phase ?? name) as any,
@@ -557,8 +548,17 @@ describe('runPipeline', () => {
   it('executes steps in sorted order', async () => {
     const order: string[] = [];
     const steps = [
-      fakeStep('b', { after: ['a'], execute: async () => { order.push('b'); } }),
-      fakeStep('a', { execute: async () => { order.push('a'); } }),
+      fakeStep('b', {
+        after: ['a'],
+        execute: async () => {
+          order.push('b');
+        },
+      }),
+      fakeStep('a', {
+        execute: async () => {
+          order.push('a');
+        },
+      }),
     ];
 
     await runPipeline(steps, makeContext());
@@ -568,11 +568,17 @@ describe('runPipeline', () => {
   it('skips steps where shouldRun returns false', async () => {
     const executed: string[] = [];
     const steps = [
-      fakeStep('a', { execute: async () => { executed.push('a'); } }),
+      fakeStep('a', {
+        execute: async () => {
+          executed.push('a');
+        },
+      }),
       fakeStep('b', {
         after: ['a'],
         shouldRun: () => false,
-        execute: async () => { executed.push('b'); },
+        execute: async () => {
+          executed.push('b');
+        },
       }),
     ];
 
@@ -583,11 +589,17 @@ describe('runPipeline', () => {
   it('skips side-effect steps in dry run', async () => {
     const executed: string[] = [];
     const steps = [
-      fakeStep('a', { execute: async () => { executed.push('a'); } }),
+      fakeStep('a', {
+        execute: async () => {
+          executed.push('a');
+        },
+      }),
       fakeStep('b', {
         after: ['a'],
         hasSideEffects: true,
-        execute: async () => { executed.push('b'); },
+        execute: async () => {
+          executed.push('b');
+        },
       }),
     ];
 
@@ -616,7 +628,9 @@ describe('runPipeline', () => {
       fakeStep('a', { execute: async () => {} }),
       fakeStep('b', {
         after: ['a'],
-        execute: async () => { throw new Error('publish failed'); },
+        execute: async () => {
+          throw new Error('publish failed');
+        },
       }),
       fakeStep('c', { after: ['b'], execute: async () => {} }),
     ];
@@ -654,7 +668,7 @@ export interface PipelineResult {
 
 export async function runPipeline(
   steps: PipelineStep<any, any>[],
-  ctx: CoreContext,
+  ctx: CoreContext
 ): Promise<PipelineResult> {
   const sorted = topologicalSort(steps);
   const accumulated: Record<string, unknown> = { ...ctx };
@@ -714,6 +728,7 @@ git commit -m "feat: implement pipeline runner with fail-fast and context mergin
 ## Task 6: Config — Schema, Defaults & Validation
 
 **Files:**
+
 - Create: `src/config/schema.ts`
 - Create: `src/config/defaults.ts`
 - Create: `test/config/schema.spec.ts`
@@ -735,95 +750,136 @@ describe('defineConfig', () => {
 
 describe('normalizeConfig', () => {
   it('normalizes aiReleaseNotes: true to object form', () => {
-    const result = normalizeConfig({
-      publishFiles: ['lib'],
-      stripScripts: true,
-      aiReleaseNotes: true,
-    }, 'pnpm');
+    const result = normalizeConfig(
+      {
+        publishFiles: ['lib'],
+        stripScripts: true,
+        aiReleaseNotes: true,
+      },
+      'pnpm'
+    );
     expect(result.aiReleaseNotes).toEqual({ enabled: true });
   });
 
   it('normalizes undefined aiReleaseNotes to disabled', () => {
-    const result = normalizeConfig({
-      publishFiles: ['lib'],
-      stripScripts: true,
-    }, 'pnpm');
+    const result = normalizeConfig(
+      {
+        publishFiles: ['lib'],
+        stripScripts: true,
+      },
+      'pnpm'
+    );
     expect(result.aiReleaseNotes).toEqual({ enabled: false });
   });
 
   it('fills missing changesets with defaults', () => {
-    const result = normalizeConfig({
-      publishFiles: ['lib'],
-      stripScripts: true,
-    }, 'pnpm');
+    const result = normalizeConfig(
+      {
+        publishFiles: ['lib'],
+        stripScripts: true,
+      },
+      'pnpm'
+    );
     expect(result.changesets).toEqual({ enabled: false, enforceInPR: false });
   });
 
   it('fills missing github with defaults', () => {
-    const result = normalizeConfig({
-      publishFiles: ['lib'],
-      stripScripts: true,
-    }, 'pnpm');
+    const result = normalizeConfig(
+      {
+        publishFiles: ['lib'],
+        stripScripts: true,
+      },
+      'pnpm'
+    );
     expect(result.github).toEqual({ releases: { enabled: false, mode: 'per-package' } });
   });
 
   it('defaults requireCleanGit to true', () => {
-    const result = normalizeConfig({
-      publishFiles: ['lib'],
-      stripScripts: true,
-    }, 'pnpm');
+    const result = normalizeConfig(
+      {
+        publishFiles: ['lib'],
+        stripScripts: true,
+      },
+      'pnpm'
+    );
     expect(result.requireCleanGit).toBe(true);
   });
 
   it('uses detected package manager when not specified', () => {
-    const result = normalizeConfig({
-      publishFiles: ['lib'],
-      stripScripts: true,
-    }, 'yarn');
+    const result = normalizeConfig(
+      {
+        publishFiles: ['lib'],
+        stripScripts: true,
+      },
+      'yarn'
+    );
     expect(result.packageManager).toBe('yarn');
   });
 
   it('config packageManager overrides detected', () => {
-    const result = normalizeConfig({
-      publishFiles: ['lib'],
-      stripScripts: true,
-      packageManager: 'npm',
-    }, 'pnpm');
+    const result = normalizeConfig(
+      {
+        publishFiles: ['lib'],
+        stripScripts: true,
+        packageManager: 'npm',
+      },
+      'pnpm'
+    );
     expect(result.packageManager).toBe('npm');
   });
 });
 
 describe('validateConfig', () => {
   it('throws if publishFiles is empty', () => {
-    expect(() => validateConfig({
-      publishFiles: [],
-      stripScripts: true,
-    }, 'pnpm')).toThrow(/publishFiles/);
+    expect(() =>
+      validateConfig(
+        {
+          publishFiles: [],
+          stripScripts: true,
+        },
+        'pnpm'
+      )
+    ).toThrow(/publishFiles/);
   });
 
   it('throws if AI feature enabled without aiProvider', () => {
-    expect(() => validateConfig({
-      publishFiles: ['lib'],
-      stripScripts: true,
-      aiReleaseNotes: true,
-    }, 'pnpm')).toThrow(/aiProvider/);
+    expect(() =>
+      validateConfig(
+        {
+          publishFiles: ['lib'],
+          stripScripts: true,
+          aiReleaseNotes: true,
+        },
+        'pnpm'
+      )
+    ).toThrow(/aiProvider/);
   });
 
   it('passes when AI feature enabled with aiProvider', () => {
-    expect(() => validateConfig({
-      publishFiles: ['lib'],
-      stripScripts: true,
-      aiReleaseNotes: true,
-      aiProvider: { provider: 'anthropic', model: 'claude-sonnet-4-20250514' },
-    }, 'pnpm')).not.toThrow();
+    expect(() =>
+      validateConfig(
+        {
+          publishFiles: ['lib'],
+          stripScripts: true,
+          aiReleaseNotes: true,
+          aiProvider: { provider: 'anthropic', model: 'claude-sonnet-4-20250514' },
+        },
+        'pnpm'
+      )
+    ).not.toThrow();
   });
 
   it('throws if github.releases.mode is invalid', () => {
-    expect(() => validateConfig({
-      publishFiles: ['lib'],
-      stripScripts: true,
-      github: { releases: { enabled: true, mode: 'invalid' as any } },
-    }, 'pnpm')).toThrow(/mode/);
+    expect(() =>
+      validateConfig(
+        {
+          publishFiles: ['lib'],
+          stripScripts: true,
+          github: { releases: { enabled: true, mode: 'invalid' as any } },
+        },
+        'pnpm'
+      )
+    ).toThrow(/mode/);
   });
 });
 ```
@@ -840,7 +896,10 @@ Expected: FAIL
 ```ts
 import type { ResolvedConfig } from '../types/config.js';
 
-export const DEFAULT_CONFIG: Omit<ResolvedConfig, 'packageManager' | 'publishFiles' | 'stripScripts'> = {
+export const DEFAULT_CONFIG: Omit<
+  ResolvedConfig,
+  'packageManager' | 'publishFiles' | 'stripScripts'
+> = {
   requireCleanGit: true,
   changesets: { enabled: false, enforceInPR: false },
   github: { releases: { enabled: false, mode: 'per-package' } },
@@ -862,13 +921,14 @@ export function defineConfig(config: AwesomePublishConfig): AwesomePublishConfig
 
 export function normalizeConfig(
   raw: AwesomePublishConfig,
-  detectedPackageManager: 'npm' | 'yarn' | 'pnpm',
+  detectedPackageManager: 'npm' | 'yarn' | 'pnpm'
 ): ResolvedConfig {
-  const aiReleaseNotes = raw.aiReleaseNotes === true
-    ? { enabled: true }
-    : raw.aiReleaseNotes === false || raw.aiReleaseNotes == null
-      ? { enabled: false }
-      : raw.aiReleaseNotes;
+  const aiReleaseNotes =
+    raw.aiReleaseNotes === true
+      ? { enabled: true }
+      : raw.aiReleaseNotes === false || raw.aiReleaseNotes == null
+        ? { enabled: false }
+        : raw.aiReleaseNotes;
 
   return {
     packageManager: raw.packageManager ?? detectedPackageManager,
@@ -878,9 +938,7 @@ export function normalizeConfig(
     changesets: raw.changesets
       ? { enabled: raw.changesets.enabled, enforceInPR: raw.changesets.enforceInPR ?? false }
       : { ...DEFAULT_CONFIG.changesets },
-    github: raw.github?.releases
-      ? { releases: raw.github.releases }
-      : { ...DEFAULT_CONFIG.github },
+    github: raw.github?.releases ? { releases: raw.github.releases } : { ...DEFAULT_CONFIG.github },
     aiProvider: raw.aiProvider,
     aiReleaseNotes,
   };
@@ -888,18 +946,24 @@ export function normalizeConfig(
 
 export function validateConfig(
   raw: AwesomePublishConfig,
-  detectedPackageManager: 'npm' | 'yarn' | 'pnpm',
+  detectedPackageManager: 'npm' | 'yarn' | 'pnpm'
 ): ResolvedConfig {
   if (!raw.publishFiles || raw.publishFiles.length === 0) {
     throw new Error('Config error: publishFiles must be a non-empty array');
   }
 
-  if (raw.github?.releases?.mode && !['per-package', 'combined'].includes(raw.github.releases.mode)) {
-    throw new Error(`Config error: github.releases.mode must be 'per-package' or 'combined', got '${raw.github.releases.mode}'`);
+  if (
+    raw.github?.releases?.mode &&
+    !['per-package', 'combined'].includes(raw.github.releases.mode)
+  ) {
+    throw new Error(
+      `Config error: github.releases.mode must be 'per-package' or 'combined', got '${raw.github.releases.mode}'`
+    );
   }
 
-  const aiEnabled = raw.aiReleaseNotes === true
-    || (typeof raw.aiReleaseNotes === 'object' && raw.aiReleaseNotes?.enabled);
+  const aiEnabled =
+    raw.aiReleaseNotes === true ||
+    (typeof raw.aiReleaseNotes === 'object' && raw.aiReleaseNotes?.enabled);
 
   if (aiEnabled && !raw.aiProvider) {
     throw new Error('Config error: aiProvider must be configured when aiReleaseNotes is enabled');
@@ -932,6 +996,7 @@ git commit -m "feat: add config schema, defaults, validation, and defineConfig"
 ## Task 7: Config — Loading via jiti
 
 **Files:**
+
 - Create: `src/config/load-config.ts`
 - Create: `test/config/load-config.spec.ts`
 - Create: `test/fixtures/configs/basic/awesome-publish.config.ts`
@@ -1002,7 +1067,8 @@ export async function loadConfigFromDir(dir: string): Promise<AwesomePublishConf
     const configPath = resolve(dir, name);
     if (existsSync(configPath)) {
       const jiti = createJiti(configPath, { interopDefault: true });
-      const mod = await jiti.import(configPath) as { default?: AwesomePublishConfig } | AwesomePublishConfig;
+      const mod = (await jiti.import(configPath)) as
+        { default?: AwesomePublishConfig } | AwesomePublishConfig;
       return 'default' in mod ? mod.default : mod;
     }
   }
@@ -1029,6 +1095,7 @@ git commit -m "feat: add config file loading via jiti"
 ## Task 8: Git Service
 
 **Files:**
+
 - Create: `src/services/git.ts`
 - Create: `test/services/git.spec.ts`
 
@@ -1138,7 +1205,12 @@ export class GitService {
   }
 
   async getCommitsSinceTag(tag: string): Promise<Commit[]> {
-    const { stdout } = await this.exec('git', ['log', `${tag}..HEAD`, '--format=%H%n%s', '--no-merges']);
+    const { stdout } = await this.exec('git', [
+      'log',
+      `${tag}..HEAD`,
+      '--format=%H%n%s',
+      '--no-merges',
+    ]);
     if (!stdout.trim()) return [];
 
     const lines = stdout.trim().split('\n');
@@ -1181,6 +1253,7 @@ git commit -m "feat: add git service with tag, commit, and clean-tree operations
 ## Task 9: Package Manager Service
 
 **Files:**
+
 - Create: `src/services/package-manager.ts`
 - Create: `test/services/package-manager.spec.ts`
 
@@ -1252,15 +1325,23 @@ export interface PackageManagerAdapter {
   pack(dir: string, outDir: string): Promise<string>;
 }
 
-function buildPublishArgs(pm: PackageManagerName, dir: string, tag?: string): { cmd: string; args: string[] } {
+function buildPublishArgs(
+  pm: PackageManagerName,
+  dir: string,
+  tag?: string
+): { cmd: string; args: string[] } {
   const args = ['publish', dir];
   if (tag) args.push('--tag', tag);
   args.push('--no-git-checks');
   return { cmd: pm, args };
 }
 
-function buildPackArgs(pm: PackageManagerName, dir: string, outDir: string): { cmd: string; args: string[] } {
-  return { cmd: pm, args: ['pack', '--pack-destination', outDir], };
+function buildPackArgs(
+  pm: PackageManagerName,
+  dir: string,
+  outDir: string
+): { cmd: string; args: string[] } {
+  return { cmd: pm, args: ['pack', '--pack-destination', outDir] };
 }
 
 export function createAdapter(pm: PackageManagerName): PackageManagerAdapter {
@@ -1295,6 +1376,7 @@ git commit -m "feat: add package manager detection and adapter service"
 ## Task 10: Workspace Service
 
 **Files:**
+
 - Create: `src/services/workspace.ts`
 - Create: `test/services/workspace.spec.ts`
 - Create: `test/fixtures/monorepo/` (fixture files)
@@ -1303,21 +1385,25 @@ git commit -m "feat: add package manager detection and adapter service"
 - [ ] **Step 1: Create test fixtures**
 
 `test/fixtures/single-package/package.json`:
+
 ```json
 { "name": "my-pkg", "version": "1.0.0" }
 ```
 
 `test/fixtures/monorepo/package.json`:
+
 ```json
 { "name": "root", "version": "0.0.0", "private": true, "workspaces": ["packages/*"] }
 ```
 
 `test/fixtures/monorepo/packages/pkg-a/package.json`:
+
 ```json
 { "name": "@scope/pkg-a", "version": "1.0.0" }
 ```
 
 `test/fixtures/monorepo/packages/pkg-b/package.json`:
+
 ```json
 { "name": "@scope/pkg-b", "version": "2.0.0" }
 ```
@@ -1363,7 +1449,7 @@ describe('resolvePackages', () => {
     const packages = await resolvePackages(
       resolve(fixturesDir, 'monorepo'),
       defaultConfig,
-      '@scope/pkg-a',
+      '@scope/pkg-a'
     );
     expect(packages).toHaveLength(1);
     expect(packages[0].name).toBe('@scope/pkg-a');
@@ -1419,7 +1505,7 @@ function matchesFilter(name: string, filter: string): boolean {
 export async function resolvePackages(
   rootDir: string,
   rootConfig: ResolvedConfig,
-  filter?: string,
+  filter?: string
 ): Promise<PackageInfo[]> {
   const rootPkg = readPackageJson(rootDir);
   const workspaces = rootPkg.workspaces as string[] | undefined;
@@ -1501,6 +1587,7 @@ git commit -m "feat: add workspace service with monorepo and filter support"
 ## Task 11: Pipeline Steps — Determine Version
 
 **Files:**
+
 - Create: `src/steps/determine-version.ts`
 - Create: `test/steps/determine-version.spec.ts`
 
@@ -1526,7 +1613,13 @@ function makeCtx(overrides: Record<string, unknown> = {}): CoreContext & Partial
       aiReleaseNotes: { enabled: false },
     },
     packages: [
-      { name: 'pkg-a', version: '1.0.0', dir: '/tmp/a', packageJson: {}, config: {} as ResolvedConfig },
+      {
+        name: 'pkg-a',
+        version: '1.0.0',
+        dir: '/tmp/a',
+        packageJson: {},
+        config: {} as ResolvedConfig,
+      },
     ],
     mode: 'ci' as const,
     dryRun: false,
@@ -1537,9 +1630,7 @@ function makeCtx(overrides: Record<string, unknown> = {}): CoreContext & Partial
 describe('determineVersionStep', () => {
   it('determines version from changesets', async () => {
     const ctx = makeCtx({
-      changesets: [
-        { id: 'abc', summary: 'feat', releases: [{ name: 'pkg-a', type: 'minor' }] },
-      ],
+      changesets: [{ id: 'abc', summary: 'feat', releases: [{ name: 'pkg-a', type: 'minor' }] }],
     });
     ctx.config.changesets = { enabled: true, enforceInPR: false };
 
@@ -1594,17 +1685,26 @@ const BUMP_ORDER = { patch: 0, minor: 1, major: 2 } as const;
 function bumpVersion(version: string, type: 'patch' | 'minor' | 'major'): string {
   const [major, minor, patch] = version.split('.').map(Number);
   switch (type) {
-    case 'major': return `${major + 1}.0.0`;
-    case 'minor': return `${major}.${minor + 1}.0`;
-    case 'patch': return `${major}.${minor}.${patch + 1}`;
+    case 'major':
+      return `${major + 1}.0.0`;
+    case 'minor':
+      return `${major}.${minor + 1}.0`;
+    case 'patch':
+      return `${major}.${minor}.${patch + 1}`;
   }
 }
 
-function highestBump(a: 'patch' | 'minor' | 'major', b: 'patch' | 'minor' | 'major'): 'patch' | 'minor' | 'major' {
+function highestBump(
+  a: 'patch' | 'minor' | 'major',
+  b: 'patch' | 'minor' | 'major'
+): 'patch' | 'minor' | 'major' {
   return BUMP_ORDER[a] >= BUMP_ORDER[b] ? a : b;
 }
 
-export const determineVersionStep: PipelineStep<Partial<ChangesetContext> & { cliArgs?: { bump?: string } }, VersionContext> = {
+export const determineVersionStep: PipelineStep<
+  Partial<ChangesetContext> & { cliArgs?: { bump?: string } },
+  VersionContext
+> = {
   name: 'determine-version',
   phase: Phases.DETERMINE_VERSION,
   after: [Phases.READ_CHANGESETS],
@@ -1622,7 +1722,10 @@ export const determineVersionStep: PipelineStep<Partial<ChangesetContext> & { cl
       for (const cs of changesets) {
         for (const release of cs.releases) {
           const existing = bumpTypes.get(release.name);
-          bumpTypes.set(release.name, existing ? highestBump(existing, release.type) : release.type);
+          bumpTypes.set(
+            release.name,
+            existing ? highestBump(existing, release.type) : release.type
+          );
         }
       }
 
@@ -1640,7 +1743,9 @@ export const determineVersionStep: PipelineStep<Partial<ChangesetContext> & { cl
     } else {
       const bumpType = (ctx as any).cliArgs?.bump as 'patch' | 'minor' | 'major' | undefined;
       if (ctx.mode === 'ci' && !bumpType) {
-        throw new Error('CI mode requires --bump=patch|minor|major when changesets are not enabled');
+        throw new Error(
+          'CI mode requires --bump=patch|minor|major when changesets are not enabled'
+        );
       }
 
       if (bumpType) {
@@ -1678,6 +1783,7 @@ git commit -m "feat: add determine-version pipeline step"
 ## Task 12: Pipeline Steps — Build Temp Dir
 
 **Files:**
+
 - Create: `src/steps/build-temp-dir.ts`
 - Create: `test/steps/build-temp-dir.spec.ts`
 
@@ -1769,7 +1875,9 @@ export const buildTempDirStep: PipelineStep<unknown, TempDirContext> = {
     const tempDirs = new Map<string, string>();
 
     for (const pkg of ctx.packages) {
-      const tempDir = mkdtempSync(join(tmpdir(), `awesome-publish-${pkg.name.replace(/[/@]/g, '-')}-`));
+      const tempDir = mkdtempSync(
+        join(tmpdir(), `awesome-publish-${pkg.name.replace(/[/@]/g, '-')}-`)
+      );
 
       // Always copy package.json
       cpSync(join(pkg.dir, 'package.json'), join(tempDir, 'package.json'));
@@ -1807,6 +1915,7 @@ git commit -m "feat: add build-temp-dir step with file whitelisting"
 ## Task 13: Pipeline Steps — Modify Package JSON
 
 **Files:**
+
 - Create: `src/steps/modify-package-json.ts`
 - Create: `test/steps/modify-package-json.spec.ts`
 
@@ -1836,11 +1945,21 @@ function setup(pkgJson: Record<string, unknown>, config: Partial<ResolvedConfig>
     tempDir,
     ctx: {
       config: resolvedConfig,
-      packages: [{ name: 'test', version: '1.0.0', dir: '/original', packageJson: pkgJson, config: resolvedConfig }],
+      packages: [
+        {
+          name: 'test',
+          version: '1.0.0',
+          dir: '/original',
+          packageJson: pkgJson,
+          config: resolvedConfig,
+        },
+      ],
       mode: 'interactive' as const,
       dryRun: false,
       tempDirs: new Map([['test', tempDir]]),
-      versionBumps: new Map([['test', { packageName: 'test', from: '1.0.0', to: '1.1.0', type: 'minor' as const }]]),
+      versionBumps: new Map([
+        ['test', { packageName: 'test', from: '1.0.0', to: '1.1.0', type: 'minor' as const }],
+      ]),
     },
   };
 }
@@ -1848,7 +1967,8 @@ function setup(pkgJson: Record<string, unknown>, config: Partial<ResolvedConfig>
 describe('modifyPackageJsonStep', () => {
   it('strips all scripts when stripScripts is true', async () => {
     const { tempDir, ctx } = setup({
-      name: 'test', version: '1.0.0',
+      name: 'test',
+      version: '1.0.0',
       scripts: { build: 'tsc', test: 'vitest', preinstall: 'check' },
     });
 
@@ -1859,8 +1979,12 @@ describe('modifyPackageJsonStep', () => {
 
   it('strips only listed scripts when stripScripts is string[]', async () => {
     const { tempDir, ctx } = setup(
-      { name: 'test', version: '1.0.0', scripts: { build: 'tsc', test: 'vitest', start: 'node .' } },
-      { stripScripts: ['build', 'test'] },
+      {
+        name: 'test',
+        version: '1.0.0',
+        scripts: { build: 'tsc', test: 'vitest', start: 'node .' },
+      },
+      { stripScripts: ['build', 'test'] }
     );
 
     await modifyPackageJsonStep.execute(ctx as any);
@@ -1964,6 +2088,7 @@ git commit -m "feat: add modify-package-json step (version bump, script strip, f
 ## Task 14: Pipeline Steps — Read & Consume Changesets
 
 **Files:**
+
 - Create: `src/steps/read-changesets.ts`
 - Create: `src/steps/consume-changesets.ts`
 - Create: `test/steps/read-changesets.spec.ts`
@@ -1973,24 +2098,27 @@ git commit -m "feat: add modify-package-json step (version bump, script strip, f
 - [ ] **Step 1: Create changeset fixtures**
 
 `test/fixtures/changesets/.changeset/config.json`:
+
 ```json
 { "$schema": "https://unpkg.com/@changesets/config@3.0.0/schema.json" }
 ```
 
 `test/fixtures/changesets/.changeset/add-feature.md`:
+
 ```markdown
 ---
-"@scope/pkg-a": minor
+'@scope/pkg-a': minor
 ---
 
 Added a new feature
 ```
 
 `test/fixtures/changesets/.changeset/fix-bug.md`:
+
 ```markdown
 ---
-"@scope/pkg-a": patch
-"@scope/pkg-b": patch
+'@scope/pkg-a': patch
+'@scope/pkg-b': patch
 ---
 
 Fixed a bug
@@ -2015,7 +2143,13 @@ describe('readChangesetsStep', () => {
         changesets: { enabled: true, enforceInPR: false },
       } as ResolvedConfig,
       packages: [
-        { name: '@scope/pkg-a', version: '1.0.0', dir: fixtureDir, packageJson: {}, config: {} as ResolvedConfig },
+        {
+          name: '@scope/pkg-a',
+          version: '1.0.0',
+          dir: fixtureDir,
+          packageJson: {},
+          config: {} as ResolvedConfig,
+        },
       ],
       mode: 'interactive' as const,
       dryRun: false,
@@ -2096,7 +2230,7 @@ export const readChangesetsStep: PipelineStep<{ rootDir: string }, ChangesetCont
   after: [],
   before: [Phases.DETERMINE_VERSION],
 
-  shouldRun: (ctx) => ctx.config.changesets.enabled,
+  shouldRun: ctx => ctx.config.changesets.enabled,
 
   async execute(ctx): Promise<ChangesetContext> {
     const changesetDir = join(ctx.rootDir, '.changeset');
@@ -2105,8 +2239,7 @@ export const readChangesetsStep: PipelineStep<{ rootDir: string }, ChangesetCont
       return { changesets: [] };
     }
 
-    const files = readdirSync(changesetDir)
-      .filter(f => f.endsWith('.md') && f !== 'README.md');
+    const files = readdirSync(changesetDir).filter(f => f.endsWith('.md') && f !== 'README.md');
 
     const changesets: Changeset[] = [];
     for (const file of files) {
@@ -2137,7 +2270,7 @@ export const consumeChangesetsStep: PipelineStep<ChangesetContext & { rootDir: s
   before: [Phases.BUILD_TEMP_DIR],
   hasSideEffects: true,
 
-  shouldRun: (ctx) => ctx.changesets?.length > 0,
+  shouldRun: ctx => ctx.changesets?.length > 0,
 
   async execute(ctx): Promise<void> {
     for (const cs of ctx.changesets) {
@@ -2167,6 +2300,7 @@ git commit -m "feat: add read-changesets and consume-changesets steps"
 ## Task 15: Pipeline Steps — Publish NPM
 
 **Files:**
+
 - Create: `src/steps/publish-npm.ts`
 - Create: `test/steps/publish-npm.spec.ts`
 
@@ -2278,6 +2412,7 @@ git commit -m "feat: add publish-npm pipeline step"
 ## Task 16: Pipeline Steps — Cleanup
 
 **Files:**
+
 - Create: `src/steps/cleanup.ts`
 
 - [ ] **Step 1: Implement cleanup step**
@@ -2296,7 +2431,7 @@ export const cleanupStep: PipelineStep<Partial<TempDirContext>> = {
   after: [Phases.PUBLISH_NPM, Phases.GITHUB_RELEASE, Phases.AI_NOTES_PUBLISH],
   before: [],
 
-  shouldRun: (ctx) => ctx.tempDirs != null && ctx.tempDirs.size > 0,
+  shouldRun: ctx => ctx.tempDirs != null && ctx.tempDirs.size > 0,
 
   async execute(ctx): Promise<void> {
     if (!ctx.tempDirs) return;
@@ -2319,6 +2454,7 @@ git commit -m "feat: add cleanup step for temp directory removal"
 ## Task 17: GitHub Service & Release Step
 
 **Files:**
+
 - Create: `src/services/github.ts`
 - Create: `src/steps/create-github-release.ts`
 - Create: `test/services/github.spec.ts`
@@ -2355,7 +2491,7 @@ describe('GitHubService', () => {
         headers: expect.objectContaining({
           Authorization: 'Bearer test-token',
         }),
-      }),
+      })
     );
   });
 
@@ -2365,7 +2501,7 @@ describe('GitHubService', () => {
     await service.updateRelease(123, 'Updated notes');
     expect(fetchMock).toHaveBeenCalledWith(
       'https://api.github.com/repos/owner/repo/releases/123',
-      expect.objectContaining({ method: 'PATCH' }),
+      expect.objectContaining({ method: 'PATCH' })
     );
   });
 
@@ -2399,7 +2535,7 @@ export class GitHubService {
     private readonly owner: string,
     private readonly repo: string,
     private readonly token: string,
-    private readonly fetchFn: typeof fetch = fetch,
+    private readonly fetchFn: typeof fetch = fetch
   ) {
     this.baseUrl = `https://api.github.com/repos/${owner}/${repo}`;
   }
@@ -2460,18 +2596,22 @@ import type { PublishContext, VersionContext, GithubReleaseContext } from '../pi
 import { GitHubService } from '../services/github.js';
 import { GitService } from '../services/git.js';
 
-export const createGithubReleaseStep: PipelineStep<PublishContext & VersionContext & { rootDir: string }, GithubReleaseContext> = {
+export const createGithubReleaseStep: PipelineStep<
+  PublishContext & VersionContext & { rootDir: string },
+  GithubReleaseContext
+> = {
   name: 'github-release',
   phase: Phases.GITHUB_RELEASE,
   after: [Phases.PUBLISH_NPM],
   before: [Phases.CLEANUP],
   hasSideEffects: true,
 
-  shouldRun: (ctx) => ctx.config.github.releases.enabled,
+  shouldRun: ctx => ctx.config.github.releases.enabled,
 
   async execute(ctx): Promise<GithubReleaseContext> {
     const token = process.env.GITHUB_TOKEN;
-    if (!token) throw new Error('GITHUB_TOKEN environment variable is required for GitHub releases');
+    if (!token)
+      throw new Error('GITHUB_TOKEN environment variable is required for GitHub releases');
 
     const { owner, repo } = await getRepoInfo(ctx.rootDir);
     const git = new GitService(ctx.rootDir);
@@ -2539,6 +2679,7 @@ git commit -m "feat: add GitHub service and create-github-release step"
 ## Task 18: AI Provider Service & Release Notes Step
 
 **Files:**
+
 - Create: `src/services/ai/provider.ts`
 - Create: `src/services/ai/anthropic.ts`
 - Create: `src/services/ai/openai-compat.ts`
@@ -2566,7 +2707,7 @@ import type { AiProvider } from './provider.js';
 export class AnthropicProvider implements AiProvider {
   constructor(
     private readonly model: string,
-    private readonly apiKey: string,
+    private readonly apiKey: string
   ) {}
 
   async generateText(prompt: string): Promise<string> {
@@ -2594,7 +2735,7 @@ export class OpenAiCompatProvider implements AiProvider {
   constructor(
     private readonly model: string,
     private readonly apiKey: string,
-    private readonly baseUrl: string,
+    private readonly baseUrl: string
   ) {}
 
   async generateText(prompt: string): Promise<string> {
@@ -2615,7 +2756,7 @@ export class OpenAiCompatProvider implements AiProvider {
       throw new Error(`AI API error ${response.status}: ${text}`);
     }
 
-    const data = await response.json() as { choices: { message: { content: string } }[] };
+    const data = (await response.json()) as { choices: { message: { content: string } }[] };
     return data.choices[0]?.message?.content ?? '';
   }
 }
@@ -2666,14 +2807,17 @@ import type { VersionContext, AiNotesContext } from '../pipeline/context.js';
 import { createAiProvider } from '../services/ai/factory.js';
 import { GitService } from '../services/git.js';
 
-export const generateAiNotesStep: PipelineStep<VersionContext & { rootDir: string }, AiNotesContext> = {
+export const generateAiNotesStep: PipelineStep<
+  VersionContext & { rootDir: string },
+  AiNotesContext
+> = {
   name: 'ai-notes-generate',
   phase: Phases.AI_NOTES_GENERATE,
   after: [Phases.DETERMINE_VERSION],
   before: [Phases.PUBLISH_NPM],
   hasSideEffects: false,
 
-  shouldRun: (ctx) => ctx.config.aiReleaseNotes.enabled,
+  shouldRun: ctx => ctx.config.aiReleaseNotes.enabled,
 
   async execute(ctx): Promise<AiNotesContext> {
     const provider = createAiProvider(ctx.config);
@@ -2693,9 +2837,7 @@ export const generateAiNotesStep: PipelineStep<VersionContext & { rootDir: strin
       if (!bump) continue;
 
       const latestTag = await git.getLatestTag(pkg.name);
-      const commits = latestTag
-        ? await git.getCommitsSinceTag(latestTag)
-        : [];
+      const commits = latestTag ? await git.getCommitsSinceTag(latestTag) : [];
 
       const commitList = commits.map(c => `- ${c.message}`).join('\n');
 
@@ -2724,7 +2866,9 @@ import type { ResolvedConfig } from '../../../src/types/config.js';
 describe('createAiProvider', () => {
   const origEnv = process.env.AWESOME_PUBLISH_AI_KEY;
 
-  beforeEach(() => { process.env.AWESOME_PUBLISH_AI_KEY = 'test-key'; });
+  beforeEach(() => {
+    process.env.AWESOME_PUBLISH_AI_KEY = 'test-key';
+  });
   afterEach(() => {
     if (origEnv) process.env.AWESOME_PUBLISH_AI_KEY = origEnv;
     else delete process.env.AWESOME_PUBLISH_AI_KEY;
@@ -2770,6 +2914,7 @@ git commit -m "feat: add AI provider service and generate-ai-notes step"
 ## Task 19: Pipeline Steps — AI Notes Publish
 
 **Files:**
+
 - Create: `src/steps/ai-notes-publish.ts`
 
 - [ ] **Step 1: Implement ai-notes-publish step**
@@ -2784,14 +2929,17 @@ import type { PipelineStep } from '../pipeline/step.js';
 import type { AiNotesContext, GithubReleaseContext } from '../pipeline/context.js';
 import { GitHubService } from '../services/github.js';
 
-export const aiNotesPublishStep: PipelineStep<AiNotesContext & GithubReleaseContext & { rootDir: string }> = {
+export const aiNotesPublishStep: PipelineStep<
+  AiNotesContext & GithubReleaseContext & { rootDir: string }
+> = {
   name: 'ai-notes-publish',
   phase: Phases.AI_NOTES_PUBLISH,
   after: [Phases.GITHUB_RELEASE],
   before: [Phases.CLEANUP],
   hasSideEffects: true,
 
-  shouldRun: (ctx) => ctx.config.github.releases.enabled && ctx.releaseNotes?.size > 0 && ctx.releaseIds?.size > 0,
+  shouldRun: ctx =>
+    ctx.config.github.releases.enabled && ctx.releaseNotes?.size > 0 && ctx.releaseIds?.size > 0,
 
   async execute(ctx): Promise<void> {
     const token = process.env.GITHUB_TOKEN;
@@ -2837,6 +2985,7 @@ git commit -m "feat: add ai-notes-publish step to update GitHub releases with AI
 ## Task 20: Pipeline Steps — Pack Local
 
 **Files:**
+
 - Create: `src/steps/pack-local.ts`
 - Create: `test/steps/pack-local.spec.ts`
 
@@ -2919,6 +3068,7 @@ git commit -m "feat: add pack-local step for local tarball creation"
 ## Task 21: Pipeline Steps — Write Versions to Disk
 
 **Files:**
+
 - Create: `src/steps/write-versions.ts`
 - Create: `test/steps/write-versions.spec.ts`
 
@@ -2938,14 +3088,35 @@ import { writeVersionsStep } from '../../src/steps/write-versions.js';
 describe('writeVersionsStep', () => {
   it('writes bumped version to source package.json', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'ap-write-ver-'));
-    writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'test', version: '1.0.0' }, null, 2));
+    writeFileSync(
+      join(dir, 'package.json'),
+      JSON.stringify({ name: 'test', version: '1.0.0' }, null, 2)
+    );
 
     const ctx = {
-      config: { packageManager: 'pnpm', publishFiles: ['lib'], stripScripts: true, requireCleanGit: true, changesets: { enabled: false, enforceInPR: false }, github: { releases: { enabled: false, mode: 'per-package' } }, aiReleaseNotes: { enabled: false } },
-      packages: [{ name: 'test', version: '1.0.0', dir, packageJson: { name: 'test', version: '1.0.0' }, config: {} }],
+      config: {
+        packageManager: 'pnpm',
+        publishFiles: ['lib'],
+        stripScripts: true,
+        requireCleanGit: true,
+        changesets: { enabled: false, enforceInPR: false },
+        github: { releases: { enabled: false, mode: 'per-package' } },
+        aiReleaseNotes: { enabled: false },
+      },
+      packages: [
+        {
+          name: 'test',
+          version: '1.0.0',
+          dir,
+          packageJson: { name: 'test', version: '1.0.0' },
+          config: {},
+        },
+      ],
       mode: 'interactive' as const,
       dryRun: false,
-      versionBumps: new Map([['test', { packageName: 'test', from: '1.0.0', to: '1.1.0', type: 'minor' as const }]]),
+      versionBumps: new Map([
+        ['test', { packageName: 'test', from: '1.0.0', to: '1.1.0', type: 'minor' as const }],
+      ]),
     };
 
     await writeVersionsStep.execute(ctx as any);
@@ -2978,7 +3149,7 @@ export const writeVersionsStep: PipelineStep<VersionContext> = {
   before: [Phases.BUILD_TEMP_DIR],
   hasSideEffects: true,
 
-  shouldRun: (ctx) => ctx.versionBumps?.size > 0,
+  shouldRun: ctx => ctx.versionBumps?.size > 0,
 
   async execute(ctx): Promise<void> {
     for (const pkg of ctx.packages) {
@@ -3013,6 +3184,7 @@ git commit -m "feat: add write-versions step to update source package.json files
 ## Task 22: CLI — Entry Point & Publish Command
 
 **Files:**
+
 - Create: `src/cli/index.ts`
 - Create: `src/cli/commands/publish.ts`
 - Create: `src/cli/shared-args.ts`
@@ -3026,7 +3198,10 @@ git commit -m "feat: add write-versions step to update source package.json files
 export const sharedArgs = {
   ci: { type: 'boolean' as const, description: 'Run in CI mode (non-interactive)' },
   'dry-run': { type: 'boolean' as const, description: 'Preview without side effects' },
-  filter: { type: 'string' as const, description: 'Process specific packages only (glob on package names)' },
+  filter: {
+    type: 'string' as const,
+    description: 'Process specific packages only (glob on package names)',
+  },
   'ignore-git': { type: 'boolean' as const, description: 'Skip clean git working tree check' },
 };
 ```
@@ -3057,9 +3232,23 @@ export type Command = 'publish' | 'pack' | 'version';
 function getCoreFeaturesForCommand(command: Command): PipelineStep<any, any>[] {
   switch (command) {
     case 'publish':
-      return [determineVersionStep, writeVersionsStep, buildTempDirStep, modifyPackageJsonStep, publishNpmStep, cleanupStep];
+      return [
+        determineVersionStep,
+        writeVersionsStep,
+        buildTempDirStep,
+        modifyPackageJsonStep,
+        publishNpmStep,
+        cleanupStep,
+      ];
     case 'pack':
-      return [determineVersionStep, writeVersionsStep, buildTempDirStep, modifyPackageJsonStep, packLocalStep, cleanupStep];
+      return [
+        determineVersionStep,
+        writeVersionsStep,
+        buildTempDirStep,
+        modifyPackageJsonStep,
+        packLocalStep,
+        cleanupStep,
+      ];
     case 'version':
       return [determineVersionStep, writeVersionsStep, cleanupStep];
   }
@@ -3078,7 +3267,8 @@ export function buildPipeline(command: Command, config: ResolvedConfig): Pipelin
   if (command === 'publish') {
     if (config.aiReleaseNotes.enabled) steps.push(generateAiNotesStep);
     if (config.github.releases.enabled) steps.push(createGithubReleaseStep);
-    if (config.aiReleaseNotes.enabled && config.github.releases.enabled) steps.push(aiNotesPublishStep);
+    if (config.aiReleaseNotes.enabled && config.github.releases.enabled)
+      steps.push(aiNotesPublishStep);
   }
 
   return steps;
@@ -3115,12 +3305,14 @@ export const publishCommand = defineCommand({
     // Load and validate config
     const pm = detectPackageManager(rootDir);
     const rawConfig = await loadConfigFromDir(rootDir);
-    const config = rawConfig ? validateConfig(rawConfig, pm) : validateConfig({ publishFiles: ['lib'], stripScripts: true }, pm);
+    const config = rawConfig
+      ? validateConfig(rawConfig, pm)
+      : validateConfig({ publishFiles: ['lib'], stripScripts: true }, pm);
 
     // Check git clean
     if (config.requireCleanGit && !args['ignore-git']) {
       const git = new GitService(rootDir);
-      if (!await git.isWorkingTreeClean()) {
+      if (!(await git.isWorkingTreeClean())) {
         throw new Error('Working tree is not clean. Commit or stash changes, or use --ignore-git');
       }
     }
@@ -3136,7 +3328,7 @@ export const publishCommand = defineCommand({
     const ctx = {
       config,
       packages,
-      mode: isCi ? 'ci' as const : 'interactive' as const,
+      mode: isCi ? ('ci' as const) : ('interactive' as const),
       dryRun,
       rootDir,
       cliArgs: { bump: args.bump, tag: args.tag },
@@ -3197,6 +3389,7 @@ git commit -m "feat: add CLI entry point and publish command"
 ## Task 23: CLI — Pack & Version Commands
 
 **Files:**
+
 - Create: `src/cli/commands/pack.ts`
 - Create: `src/cli/commands/version.ts`
 - Modify: `src/cli/index.ts`
@@ -3227,14 +3420,16 @@ export const packCommand = defineCommand({
     const isCi = args.ci || !!process.env.CI || !!process.env.GITHUB_ACTIONS;
     const pm = detectPackageManager(rootDir);
     const rawConfig = await loadConfigFromDir(rootDir);
-    const config = rawConfig ? validateConfig(rawConfig, pm) : validateConfig({ publishFiles: ['lib'], stripScripts: true }, pm);
+    const config = rawConfig
+      ? validateConfig(rawConfig, pm)
+      : validateConfig({ publishFiles: ['lib'], stripScripts: true }, pm);
     const packages = await resolvePackages(rootDir, config, args.filter);
 
     const steps = buildPipeline('pack', config);
     const ctx = {
       config,
       packages,
-      mode: isCi ? 'ci' as const : 'interactive' as const,
+      mode: isCi ? ('ci' as const) : ('interactive' as const),
       dryRun: args['dry-run'] ?? false,
       rootDir,
       cliArgs: { bump: args.bump, out: args.out },
@@ -3275,14 +3470,16 @@ export const versionCommand = defineCommand({
     const isCi = args.ci || !!process.env.CI || !!process.env.GITHUB_ACTIONS;
     const pm = detectPackageManager(rootDir);
     const rawConfig = await loadConfigFromDir(rootDir);
-    const config = rawConfig ? validateConfig(rawConfig, pm) : validateConfig({ publishFiles: ['lib'], stripScripts: true }, pm);
+    const config = rawConfig
+      ? validateConfig(rawConfig, pm)
+      : validateConfig({ publishFiles: ['lib'], stripScripts: true }, pm);
     const packages = await resolvePackages(rootDir, config, args.filter);
 
     const steps = buildPipeline('version', config);
     const ctx = {
       config,
       packages,
-      mode: isCi ? 'ci' as const : 'interactive' as const,
+      mode: isCi ? ('ci' as const) : ('interactive' as const),
       dryRun: args['dry-run'] ?? false,
       rootDir,
       cliArgs: { bump: args.bump },
@@ -3342,6 +3539,7 @@ git commit -m "feat: add pack and version CLI commands"
 ## Task 24: CLI — Init Command & Templates
 
 **Files:**
+
 - Create: `src/cli/commands/init.ts`
 - Create: `src/templates/config-template.ts`
 - Create: `src/templates/github-actions.ts`
@@ -3545,6 +3743,7 @@ git commit -m "feat: add init command with config wizard and CI templates"
 ## Task 25: Process Signal Handling & Final Integration
 
 **Files:**
+
 - Modify: `src/cli/commands/publish.ts`
 - Modify: `src/pipeline/pipeline.ts`
 
@@ -3558,10 +3757,15 @@ let activeTempDirs: string[] = [];
 function registerCleanupHandler() {
   const cleanup = () => {
     for (const dir of activeTempDirs) {
-      try { rmSync(dir, { recursive: true, force: true }); } catch {}
+      try {
+        rmSync(dir, { recursive: true, force: true });
+      } catch {}
     }
   };
-  process.on('SIGINT', () => { cleanup(); process.exit(130); });
+  process.on('SIGINT', () => {
+    cleanup();
+    process.exit(130);
+  });
   process.on('exit', cleanup);
 }
 ```

@@ -12,7 +12,13 @@ describe('readChangesetsStep', () => {
         changesets: { enabled: true, enforceInPR: false },
       } as ResolvedConfig,
       packages: [
-        { name: '@scope/pkg-a', version: '1.0.0', dir: fixtureDir, packageJson: {}, config: {} as ResolvedConfig },
+        {
+          name: '@scope/pkg-a',
+          version: '1.0.0',
+          dir: fixtureDir,
+          packageJson: {},
+          config: {} as ResolvedConfig,
+        },
       ],
       mode: 'interactive' as const,
       dryRun: false,

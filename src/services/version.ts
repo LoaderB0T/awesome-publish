@@ -34,7 +34,7 @@ export function bumpVersion(version: string, type: 'patch' | 'minor' | 'major'):
  */
 export function highestBump(
   a: 'patch' | 'minor' | 'major',
-  b: 'patch' | 'minor' | 'major',
+  b: 'patch' | 'minor' | 'major'
 ): 'patch' | 'minor' | 'major' {
   return BUMP_ORDER[a] >= BUMP_ORDER[b] ? a : b;
 }
@@ -95,7 +95,7 @@ export async function resolvePreVersion(
   baseVersion: string,
   identifier: string,
   registry: string,
-  fetchFn: typeof fetch = fetch,
+  fetchFn: typeof fetch = fetch
 ): Promise<string> {
   const prefix = `${baseVersion}-${identifier}.`;
 
@@ -118,7 +118,7 @@ export async function resolvePreVersion(
 
     if (response.status === 401 || response.status === 403) {
       throw new Error(
-        `Registry returned ${response.status} for ${packageName}. Set NPM_TOKEN env var for private registries.`,
+        `Registry returned ${response.status} for ${packageName}. Set NPM_TOKEN env var for private registries.`
       );
     }
 
@@ -140,6 +140,8 @@ export async function resolvePreVersion(
     return `${prefix}${maxN + 1}`;
   } catch (error: any) {
     if (error?.message?.includes('Registry returned')) throw error;
-    throw new Error(`Failed to query registry for prerelease versions of ${packageName}: ${error?.message ?? error}`);
+    throw new Error(
+      `Failed to query registry for prerelease versions of ${packageName}: ${error?.message ?? error}`
+    );
   }
 }

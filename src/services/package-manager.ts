@@ -24,19 +24,43 @@ function quote(s: string): string {
   return `"${s.replace(/"/g, '\\"')}"`;
 }
 
-function buildPublishCmd(pm: PackageManagerName, dir: string, tag?: string, otp?: string, registry?: string): string {
-  const parts = [pm, 'publish', quote(dir)];
+/**
+ * yarn's `yarn publish <folder>` / `yarn pack` have unreliable version-prompt
+ * and flag semantics (and differ across yarn classic vs berry). We publish the
+ * already-prepared temp dir with the npm CLI instead — it reads the same
+ * registry auth (.npmrc) and the temp package.json already carries the correct
+ * version. ponytail: yarn berry auth in .yarnrc.yml is not read by npm; document
+ * NODE_AUTH_TOKEN / .npmrc for CI.
+ */
+function publishBinary(pm: PackageManagerName): 'npm' | 'pnpm' {
+  return pm === 'pnpm' ? 'pnpm' : 'npm';
+}
+
+export function buildPublishCmd(
+  pm: PackageManagerName,
+  dir: string,
+  tag?: string,
+  otp?: string,
+  registry?: string
+): string {
+  const bin = publishBinary(pm);
+  const parts = [bin, 'publish', quote(dir)];
   if (tag) parts.push('--tag', quote(tag));
   if (otp) parts.push('--otp', quote(otp));
-  if (registry && registry !== 'https://registry.npmjs.org') {
+  if (registry && registry.replace(/\/$/, '') !== 'https://registry.npmjs.org') {
     parts.push('--registry', quote(registry));
   }
-  parts.push('--no-git-checks');
+  // --no-git-checks is a pnpm-only flag; npm/yarn reject it. We publish from an
+  // isolated temp dir anyway, so there is nothing for pnpm to git-check.
+  if (bin === 'pnpm') parts.push('--no-git-checks');
   return parts.join(' ');
 }
 
-function buildPackCmd(pm: PackageManagerName, outDir: string): string {
-  return [pm, 'pack', '--pack-destination', quote(outDir)].join(' ');
+export function buildPackCmd(pm: PackageManagerName, outDir: string): string {
+  // npm (v7+) and pnpm both support --pack-destination. yarn does not, so it
+  // falls back to the npm CLI (see publishBinary rationale).
+  const bin = publishBinary(pm);
+  return [bin, 'pack', '--pack-destination', quote(outDir)].join(' ');
 }
 
 export function createAdapter(pm: PackageManagerName): PackageManagerAdapter {

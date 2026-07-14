@@ -5,11 +5,11 @@
 
 # awesome-publish
 
-Template for TypeScript projects with Jest, ESLint, Prettier, GitHub Actions, and more.
+Template for TypeScript projects with Vitest, oxlint, oxfmt, GitHub Actions, and more.
 
 ## Motivation 💥
 
-**awesome-publish** is a template for TypeScript (ESM&CJS) projects with Jest, ESLint, Prettier, GitHub Actions, and more.
+**awesome-publish** is a template for TypeScript (ESM&CJS) projects with Vitest, oxlint, oxfmt, GitHub Actions, and more.
 
 ## Features 🔥
 
