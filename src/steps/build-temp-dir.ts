@@ -31,18 +31,31 @@ export const buildTempDirStep: PipelineStep<unknown, TempDirContext> = {
         tempDirs.set(pkg.name, tempDir);
         debug('build-temp-dir', `${pkg.name} → ${tempDir}`);
 
-        cpSync(join(pkg.dir, 'package.json'), join(tempDir, 'package.json'));
+        // publishDir mode: pack from the built subdirectory (e.g. dist/) using
+        // its generated package.json — the ng-packagr / tsc-post-build manifest
+        // with real `exports` — instead of the source package.json. Everything
+        // (manifest, README/LICENSE, publishFiles) is resolved relative to this
+        // packRoot.
+        const packRoot = pkg.config.publishDir ? join(pkg.dir, pkg.config.publishDir) : pkg.dir;
+        if (pkg.config.publishDir && !existsSync(packRoot)) {
+          throw new Error(
+            `${pkg.name}: publishDir "${pkg.config.publishDir}" not found at ${packRoot}. ` +
+              `Did the build run and emit it? (buildCommand must produce ${pkg.config.publishDir}/package.json)`
+          );
+        }
+
+        cpSync(join(packRoot, 'package.json'), join(tempDir, 'package.json'));
 
         // npm always includes README/LICENSE/CHANGELOG in a tarball — but only
         // when they physically exist in the package dir. We publish from a
         // detached temp dir, so copy them explicitly (matching npm's
         // always-included set) or every package ships with no README/license.
         for (const entry of globSync('{README,LICENSE,LICENCE,CHANGELOG,NOTICE}*', {
-          cwd: pkg.dir,
+          cwd: packRoot,
           nocase: true,
           nodir: true, // a dir named LICENSES/ (REUSE convention) would crash cpSync
         })) {
-          cpSync(join(pkg.dir, entry), join(tempDir, entry));
+          cpSync(join(packRoot, entry), join(tempDir, entry));
           debug('build-temp-dir', `${pkg.name}: included ${entry}`);
         }
 
@@ -69,8 +82,15 @@ export const buildTempDirStep: PipelineStep<unknown, TempDirContext> = {
         for (const entry of pkg.config.publishFiles) {
           // publishFiles doubles as npm's `files` field, which accepts globs.
           // Expand here so glob patterns (e.g. "dist/**/*.js") are actually
-          // copied into the temp dir, not just literal paths.
-          const matches = globSync(entry, { cwd: pkg.dir, dot: true });
+          // copied into the temp dir, not just literal paths. In publishDir mode
+          // it is a copy filter relative to the built dir (default '**/*').
+          const matches = globSync(entry, {
+            cwd: packRoot,
+            dot: true,
+            // The manifest is copied separately above; never copy it twice (and
+            // '**/*' would otherwise re-copy the built dir's package.json).
+            ignore: 'package.json',
+          });
           if (matches.length === 0) {
             console.warn(`⚠ ${pkg.name}: publishFiles entry "${entry}" matched nothing — skipping`);
             debug('build-temp-dir', `${pkg.name}: no match for publishFile "${entry}"`);
@@ -78,7 +98,7 @@ export const buildTempDirStep: PipelineStep<unknown, TempDirContext> = {
           }
           totalMatched += matches.length;
           for (const match of matches) {
-            const src = resolve(pkg.dir, match);
+            const src = resolve(packRoot, match);
             const dest = join(tempDir, match);
             mkdirSync(dirname(dest), { recursive: true });
             cpSync(src, dest, { recursive: true });
@@ -98,7 +118,7 @@ export const buildTempDirStep: PipelineStep<unknown, TempDirContext> = {
         const isPack = (ctx as any).command === 'pack';
         if (totalMatched === 0 && (willPublish || isPack)) {
           throw new Error(
-            `${pkg.name}: none of publishFiles [${pkg.config.publishFiles.join(', ')}] matched any files in ${pkg.dir}. ` +
+            `${pkg.name}: none of publishFiles [${pkg.config.publishFiles.join(', ')}] matched any files in ${packRoot}. ` +
               `The package would be published empty. Check your build output and publishFiles (did the build run? correct directory?).`
           );
         }

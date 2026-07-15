@@ -170,6 +170,70 @@ describe('buildTempDirStep', () => {
     expect(after).toEqual(before);
   });
 
+  it('publishDir: packs the built dir manifest (with exports), not the source package.json', async () => {
+    const pkgDir = mkdtempSync(join(tmpdir(), 'ap-build-publishdir-'));
+    // Source manifest: no exports, has devDependencies/scripts (the shape a
+    // build tool strips). This must NOT be what ends up in the tarball.
+    writeFileSync(
+      join(pkgDir, 'package.json'),
+      JSON.stringify({ name: 'lib', version: '1.0.0', scripts: { build: 'x' } })
+    );
+    writeFileSync(join(pkgDir, 'README.md'), '# source readme (should be ignored)');
+    // Built dir: the real publish manifest (generated exports) + emitted code.
+    const distDir = join(pkgDir, 'dist');
+    mkdirSync(distDir);
+    writeFileSync(
+      join(distDir, 'package.json'),
+      JSON.stringify({ name: 'lib', version: '1.0.0', exports: { '.': './index.js' } })
+    );
+    writeFileSync(join(distDir, 'index.js'), 'export default 1;');
+    writeFileSync(join(distDir, 'README.md'), '# built readme');
+
+    const config = { publishFiles: ['**/*'], publishDir: 'dist' } as ResolvedConfig;
+    const ctx = {
+      config,
+      packages: [{ name: 'lib', version: '1.0.0', dir: pkgDir, packageJson: {}, config }],
+      versionBumps: new Map([
+        ['lib', { packageName: 'lib', from: '1.0.0', to: '1.0.1', type: 'patch' }],
+      ]),
+      command: 'publish' as const,
+      mode: 'ci' as const,
+      dryRun: false,
+    };
+
+    const result = await buildTempDirStep.execute(ctx as any);
+    const tempDir = result.tempDirs.get('lib')!;
+    createdDirs.push(tempDir);
+    createdDirs.push(pkgDir);
+
+    // The manifest came from dist/, so it has exports.
+    const manifest = JSON.parse(readFileSync(join(tempDir, 'package.json'), 'utf-8'));
+    expect(manifest.exports).toEqual({ '.': './index.js' });
+    // Built code is present; the built README wins over the source one.
+    expect(existsSync(join(tempDir, 'index.js'))).toBe(true);
+    expect(readFileSync(join(tempDir, 'README.md'), 'utf-8')).toContain('built readme');
+    // The '**/*' copy filter must not re-copy the dist package.json anywhere.
+    expect(existsSync(join(tempDir, 'dist'))).toBe(false);
+  });
+
+  it('publishDir: throws a clear error when the built dir is missing', async () => {
+    const pkgDir = mkdtempSync(join(tmpdir(), 'ap-build-nodist-'));
+    writeFileSync(join(pkgDir, 'package.json'), JSON.stringify({ name: 'lib', version: '1.0.0' }));
+    createdDirs.push(pkgDir);
+    const config = { publishFiles: ['**/*'], publishDir: 'dist' } as ResolvedConfig;
+    const ctx = {
+      config,
+      packages: [{ name: 'lib', version: '1.0.0', dir: pkgDir, packageJson: {}, config }],
+      versionBumps: new Map([
+        ['lib', { packageName: 'lib', from: '1.0.0', to: '1.0.1', type: 'patch' }],
+      ]),
+      command: 'publish' as const,
+      mode: 'ci' as const,
+      dryRun: false,
+    };
+    await expect(buildTempDirStep.execute(ctx as any)).rejects.toThrow(/publishDir.*not found/i);
+  });
+
   it('does NOT throw on an empty match for a no-bump sibling under `publish`', async () => {
     const pkgDir = mkdtempSync(join(tmpdir(), 'ap-build-nobump-'));
     writeFileSync(join(pkgDir, 'package.json'), JSON.stringify({ name: 'sib', version: '1.0.0' }));

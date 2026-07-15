@@ -37,7 +37,10 @@ export function normalizeConfig(
   return {
     packageManager: raw.packageManager ?? detectedPackageManager,
     registry: raw.registry ?? DEFAULT_CONFIG.registry,
-    publishFiles: raw.publishFiles,
+    // In publishDir mode publishFiles is an optional copy filter; default to the
+    // whole built directory so the package ships its complete build output.
+    publishFiles: raw.publishFiles ?? ['**/*'],
+    publishDir: raw.publishDir,
     stripScripts: raw.stripScripts,
     buildCommand: raw.buildCommand,
     access: raw.access ?? DEFAULT_CONFIG.access,
@@ -71,10 +74,19 @@ export function validateConfig(
   raw: AwesomePublishConfig,
   detectedPackageManager: 'npm' | 'yarn' | 'pnpm'
 ): ResolvedConfig {
-  if (!raw.publishFiles || raw.publishFiles.length === 0) {
+  if (raw.publishDir !== undefined && (typeof raw.publishDir !== 'string' || !raw.publishDir)) {
+    throw new Error('Config error: publishDir must be a non-empty string');
+  }
+
+  // publishFiles is required in the default (source-root) mode, but optional in
+  // publishDir mode where it defaults to the whole built directory.
+  if (raw.publishDir === undefined && (!raw.publishFiles || raw.publishFiles.length === 0)) {
     throw new Error('Config error: publishFiles must be a non-empty array');
   }
-  if (!Array.isArray(raw.publishFiles) || raw.publishFiles.some(f => typeof f !== 'string')) {
+  if (
+    raw.publishFiles !== undefined &&
+    (!Array.isArray(raw.publishFiles) || raw.publishFiles.some(f => typeof f !== 'string'))
+  ) {
     throw new Error('Config error: publishFiles must be an array of strings');
   }
 

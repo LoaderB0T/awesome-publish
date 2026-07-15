@@ -43,6 +43,11 @@ export const initCommand = defineCommand({
       type: 'string' as const,
       description: 'Comma/space-separated publishFiles (with --yes). Default: lib',
     },
+    dir: {
+      type: 'string' as const,
+      description:
+        'Publish from a built subdirectory (e.g. "dist") using its generated package.json',
+    },
     build: {
       type: 'string' as const,
       description: 'Build command to run before packing (e.g. "npm run build")',
@@ -75,6 +80,7 @@ export const initCommand = defineCommand({
     // --- Gather options (defaults in --yes mode, otherwise prompt) ---
 
     let publishFiles: string[];
+    let publishDir: string | undefined = args.dir || undefined;
     let stripScripts: boolean;
     let buildCommand: string | undefined = args.build || undefined;
     let changesetsEnabled: boolean;
@@ -97,17 +103,34 @@ export const initCommand = defineCommand({
       writeWorkflow = true;
       writeChangesetCheck = true;
     } else {
-      const publishFilesInput = await AwesomeLogger.prompt('text', {
-        text: 'Which files/dirs to include in published package?',
-        hints: ['lib', 'dist', 'README.md', 'LICENSE'],
-        default: 'lib',
+      const publishDirInput = await AwesomeLogger.prompt('text', {
+        text: 'Publish from a built subdirectory using its generated package.json? (e.g. dist — empty to pack the package root)',
+        hints: ['dist'],
+        default: '',
         allowOnlyHints: false,
         caseInsensitive: false,
         fuzzyAutoComplete: false,
         validators: [],
       }).result;
+      publishDir = publishDirInput.trim() || undefined;
 
-      publishFiles = publishFilesInput.split(/[,\s]+/).filter(Boolean);
+      if (publishDir) {
+        // In publishDir mode the built manifest declares its own files; skip the
+        // publishFiles prompt and default to packing the whole built dir.
+        publishFiles = ['**/*'];
+      } else {
+        const publishFilesInput = await AwesomeLogger.prompt('text', {
+          text: 'Which files/dirs to include in published package?',
+          hints: ['lib', 'dist', 'README.md', 'LICENSE'],
+          default: 'lib',
+          allowOnlyHints: false,
+          caseInsensitive: false,
+          fuzzyAutoComplete: false,
+          validators: [],
+        }).result;
+
+        publishFiles = publishFilesInput.split(/[,\s]+/).filter(Boolean);
+      }
 
       stripScripts = await AwesomeLogger.prompt('confirm', {
         text: 'Strip scripts from published package.json?',
@@ -218,7 +241,9 @@ export const initCommand = defineCommand({
     // --- Build config ---
 
     const config: Partial<ResolvedConfig> = {
-      publishFiles,
+      // publishDir and publishFiles are mutually exclusive in the scaffolded
+      // config: publishDir mode packs the built dir's own manifest.
+      ...(publishDir ? { publishDir } : { publishFiles }),
       stripScripts,
       ...(buildCommand ? { buildCommand } : {}),
       packageManager: pm,
