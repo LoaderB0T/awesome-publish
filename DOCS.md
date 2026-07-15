@@ -26,25 +26,26 @@ export default defineConfig({
 
 ### Options
 
-| Option                | Type                                        | Default                                   | Description                                                                                                                                                   |
-| --------------------- | ------------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `publishFiles`        | `string[]` **(required)**                   | —                                         | Files/globs to include in the published package (also written to `files`).                                                                                    |
-| `stripScripts`        | `boolean \| string[]` **(required)**        | —                                         | Strip all (`true`) or specific scripts from the published `package.json`.                                                                                     |
-| `buildCommand`        | `string`                                    | —                                         | Command run in the repo before packing (e.g. `pnpm run build`). Needed for compiled packages, since `publishFiles` are copied as-is and scripts are stripped. |
-| `packageManager`      | `'npm' \| 'yarn' \| 'pnpm'`                 | auto-detected from lockfile               | Override the detected package manager.                                                                                                                        |
-| `registry`            | `string`                                    | `https://registry.npmjs.org`              | Target registry.                                                                                                                                              |
-| `access`              | `'public' \| 'restricted'`                  | `'public'`                                | npm access for **scoped** packages on first publish.                                                                                                          |
-| `provenance`          | `boolean`                                   | `false`                                   | Publish with npm provenance (requires OIDC, e.g. GitHub Actions id-token).                                                                                    |
-| `requireCleanGit`     | `boolean`                                   | `true`                                    | Refuse to publish with a dirty working tree (override with `--ignore-git`).                                                                                   |
-| `gitTag`              | `boolean \| { enabled; prefix? }`           | `{ enabled: true, prefix: '' }`           | Create and push git tags after a release.                                                                                                                     |
-| `changelog`           | `boolean \| { enabled; file? }`             | `{ enabled: true, file: 'CHANGELOG.md' }` | Generate a changelog file.                                                                                                                                    |
-| `conventionalCommits` | `boolean`                                   | `false`                                   | Auto-detect the bump type from Conventional Commit messages.                                                                                                  |
-| `confirmPublish`      | `boolean`                                   | `true`                                    | Prompt for confirmation before publishing (interactive mode).                                                                                                 |
-| `syncDependencies`    | `boolean`                                   | `false`                                   | Rewrite internal dependency ranges to the newly bumped versions.                                                                                              |
-| `changesets`          | `{ enabled; enforceInPR? }`                 | `{ enabled: false }`                      | Use changeset files for version management.                                                                                                                   |
-| `github.releases`     | `{ enabled; mode; draft? }`                 | `{ enabled: false }`                      | Create GitHub releases; `mode` is `'per-package'` or `'combined'`.                                                                                            |
-| `aiProvider`          | `{ provider; model; baseUrl? }`             | —                                         | AI provider config (required when AI features are enabled).                                                                                                   |
-| `aiReleaseNotes`      | `boolean \| { enabled; customPromptFile? }` | `false`                                   | Generate AI release notes.                                                                                                                                    |
+| Option                | Type                                        | Default                                   | Description                                                                                                                                                                                                                                                                       |
+| --------------------- | ------------------------------------------- | ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `publishFiles`        | `string[]` (required unless `publishDir`)   | —                                         | Files/globs to include in the published package (also written to `files`). In `publishDir` mode it is an optional copy filter (default `['**/*']`) and `files` is left as the built manifest declares it.                                                                         |
+| `publishDir`          | `string`                                    | —                                         | Publish from a built subdirectory (e.g. `'dist'`) using its **generated** `package.json` instead of the source one. For build tools that emit a ready-to-publish dir (ng-packagr, a tsc post-build). See [Publishing from a built directory](#publishing-from-a-built-directory). |
+| `stripScripts`        | `boolean \| string[]` **(required)**        | —                                         | Strip all (`true`) or specific scripts from the published `package.json`.                                                                                                                                                                                                         |
+| `buildCommand`        | `string`                                    | —                                         | Command run in the repo before packing (e.g. `pnpm run build`). Needed for compiled packages, since `publishFiles` are copied as-is and scripts are stripped.                                                                                                                     |
+| `packageManager`      | `'npm' \| 'yarn' \| 'pnpm'`                 | auto-detected from lockfile               | Override the detected package manager.                                                                                                                                                                                                                                            |
+| `registry`            | `string`                                    | `https://registry.npmjs.org`              | Target registry.                                                                                                                                                                                                                                                                  |
+| `access`              | `'public' \| 'restricted'`                  | `'public'`                                | npm access for **scoped** packages on first publish.                                                                                                                                                                                                                              |
+| `provenance`          | `boolean`                                   | `false`                                   | Publish with npm provenance (requires OIDC, e.g. GitHub Actions id-token).                                                                                                                                                                                                        |
+| `requireCleanGit`     | `boolean`                                   | `true`                                    | Refuse to publish with a dirty working tree (override with `--ignore-git`).                                                                                                                                                                                                       |
+| `gitTag`              | `boolean \| { enabled; prefix? }`           | `{ enabled: true, prefix: '' }`           | Create and push git tags after a release.                                                                                                                                                                                                                                         |
+| `changelog`           | `boolean \| { enabled; file? }`             | `{ enabled: true, file: 'CHANGELOG.md' }` | Generate a changelog file.                                                                                                                                                                                                                                                        |
+| `conventionalCommits` | `boolean`                                   | `false`                                   | Auto-detect the bump type from Conventional Commit messages.                                                                                                                                                                                                                      |
+| `confirmPublish`      | `boolean`                                   | `true`                                    | Prompt for confirmation before publishing (interactive mode).                                                                                                                                                                                                                     |
+| `syncDependencies`    | `boolean`                                   | `false`                                   | Rewrite internal dependency ranges to the newly bumped versions.                                                                                                                                                                                                                  |
+| `changesets`          | `{ enabled; enforceInPR? }`                 | `{ enabled: false }`                      | Use changeset files for version management.                                                                                                                                                                                                                                       |
+| `github.releases`     | `{ enabled; mode; draft? }`                 | `{ enabled: false }`                      | Create GitHub releases; `mode` is `'per-package'` or `'combined'`.                                                                                                                                                                                                                |
+| `aiProvider`          | `{ provider; model; baseUrl? }`             | —                                         | AI provider config (required when AI features are enabled).                                                                                                                                                                                                                       |
+| `aiReleaseNotes`      | `boolean \| { enabled; customPromptFile? }` | `false`                                   | Generate AI release notes.                                                                                                                                                                                                                                                        |
 
 `workspace:` protocol ranges (pnpm) are resolved to concrete versions in the
 published `package.json` automatically.
@@ -120,13 +121,14 @@ Create a changeset for changed packages.
 
 Scaffold config and optional workflows.
 
-| Flag           | Description                                                   |
-| -------------- | ------------------------------------------------------------- |
-| `--yes`        | Non-interactive: accept sensible defaults.                    |
-| `--force`      | Overwrite existing files instead of skipping them.            |
-| `--files`      | `publishFiles` for `--yes` mode (default `lib`).              |
-| `--build`      | Build command to run before packing (e.g. `"npm run build"`). |
-| `--provenance` | Enable npm provenance in the generated workflow.              |
+| Flag           | Description                                                          |
+| -------------- | -------------------------------------------------------------------- |
+| `--yes`        | Non-interactive: accept sensible defaults.                           |
+| `--force`      | Overwrite existing files instead of skipping them.                   |
+| `--files`      | `publishFiles` for `--yes` mode (default `lib`).                     |
+| `--dir`        | Publish from a built subdirectory (e.g. `dist`) — sets `publishDir`. |
+| `--build`      | Build command to run before packing (e.g. `"npm run build"`).        |
+| `--provenance` | Enable npm provenance in the generated workflow.                     |
 
 ### `status`
 
@@ -172,6 +174,45 @@ import { defineConfig } from 'awesome-publish';
 
 export default defineConfig({ ...root, publishFiles: ['dist'] });
 ```
+
+## Publishing from a built directory
+
+Some build tools don't just compile into a subfolder — they emit a **complete,
+ready-to-publish package** into `dist/`, including a freshly generated
+`package.json` with resolved `exports`, `module`, and stripped dev fields.
+ng-packagr does this; so does a common tsc "post-build" script. For those
+packages the source `package.json` is _not_ the manifest you want to publish.
+
+`publishDir` tells awesome-publish to pack from that built directory using its
+generated manifest:
+
+```typescript
+// packages/my-lib/awesome-publish.config.ts
+import { defineConfig } from 'awesome-publish';
+
+export default defineConfig({
+  publishDir: 'dist', // pack packages/my-lib/dist and its generated package.json
+  stripScripts: true,
+  // buildCommand lives at the workspace root and must produce dist/ first.
+});
+```
+
+What changes in `publishDir` mode:
+
+- The manifest, `README`/`LICENSE`, and `publishFiles` are resolved **inside**
+  `<packageDir>/<publishDir>`, not the package root.
+- `publishFiles` becomes optional (default `['**/*']`) and acts as a **copy
+  filter**. The built manifest's own `files` is left untouched — the build tool
+  already declared what ships.
+- Version bumping and `workspace:` range resolution still apply to the built
+  manifest, so `dist/package.json` publishes with the correct version and
+  concrete dependency ranges.
+- Package **discovery**, version detection, and dependency ordering still read
+  the source `package.json` — only packing switches to the built dir.
+
+The build must run before packing (via a root `buildCommand` or a CI build
+step) so `<publishDir>/package.json` exists; otherwise the run fails fast with a
+clear "publishDir not found" error rather than publishing something broken.
 
 ## GitHub releases
 

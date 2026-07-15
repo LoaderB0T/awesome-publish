@@ -82,6 +82,22 @@ describe('modifyPackageJsonStep', () => {
     expect(result.files).toEqual(['lib']);
   });
 
+  it('does NOT overwrite files in publishDir mode (built manifest is authoritative)', async () => {
+    // The built manifest already declares its own files/exports; publishFiles is
+    // only a copy filter in publishDir mode, so `files` must be left as-is.
+    const { tempDir, ctx } = setup(
+      { name: 'test', version: '1.0.0', files: ['index.js'], exports: { '.': './index.js' } },
+      { publishDir: 'dist', publishFiles: ['**/*'] }
+    );
+
+    await modifyPackageJsonStep.execute(ctx as any);
+    const result = JSON.parse(readFileSync(join(tempDir, 'package.json'), 'utf-8'));
+    expect(result.files).toEqual(['index.js']);
+    expect(result.exports).toEqual({ '.': './index.js' });
+    // Version bump still applies to the built manifest.
+    expect(result.version).toBe('1.1.0');
+  });
+
   it('resolves workspace: protocol ranges to real versions', async () => {
     const { tempDir, ctx } = setup({
       name: 'test',

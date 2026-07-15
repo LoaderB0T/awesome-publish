@@ -5,9 +5,16 @@ export function generateConfigFile(config: Partial<ResolvedConfig>): string {
     `import { defineConfig } from 'awesome-publish';`,
     ``,
     `export default defineConfig({`,
-    `  publishFiles: ${JSON.stringify(config.publishFiles ?? ['lib'])},`,
-    `  stripScripts: ${config.stripScripts ?? true},`,
   ];
+
+  if (config.publishDir) {
+    // publishDir mode: pack from the built dir; publishFiles is an optional
+    // copy filter (defaults to the whole dir), so don't scaffold a misleading one.
+    lines.push(`  publishDir: ${JSON.stringify(config.publishDir)},`);
+  } else {
+    lines.push(`  publishFiles: ${JSON.stringify(config.publishFiles ?? ['lib'])},`);
+  }
+  lines.push(`  stripScripts: ${config.stripScripts ?? true},`);
 
   if (config.buildCommand) {
     lines.push(`  buildCommand: ${JSON.stringify(config.buildCommand)},`);

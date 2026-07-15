@@ -92,8 +92,13 @@ export const modifyPackageJsonStep: PipelineStep<TempDirContext & VersionContext
         }
       }
 
-      pkgJson.files = pkg.config.publishFiles;
-      debug('modify-package-json', `${pkg.name}: files set to`, pkg.config.publishFiles);
+      // In publishDir mode the manifest is the build tool's generated one, which
+      // already declares its own `files`/`exports` — leave it authoritative.
+      // publishFiles there is only a copy filter, not the package contents.
+      if (!pkg.config.publishDir) {
+        pkgJson.files = pkg.config.publishFiles;
+        debug('modify-package-json', `${pkg.name}: files set to`, pkg.config.publishFiles);
+      }
 
       writeFileSync(pkgJsonPath, `${JSON.stringify(pkgJson, null, 2)}\n`);
     }
