@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { Phases } from '../pipeline/phases.js';
 import type { PipelineStep } from '../pipeline/step.js';
 import type { TempDirContext, VersionContext } from '../pipeline/context.js';
+import { resolvePackages } from '../services/workspace.js';
 import { debug } from '../services/debug.js';
 
 const DEP_FIELDS = [
@@ -30,7 +31,9 @@ function resolveWorkspaceRange(range: string, siblingVersion: string): string {
   return spec;
 }
 
-export const modifyPackageJsonStep: PipelineStep<TempDirContext & VersionContext> = {
+export const modifyPackageJsonStep: PipelineStep<
+  TempDirContext & VersionContext & { rootDir: string }
+> = {
   name: 'modify-package-json',
   phase: Phases.MODIFY_PACKAGE_JSON,
   after: [Phases.BUILD_TEMP_DIR],
@@ -45,6 +48,21 @@ export const modifyPackageJsonStep: PipelineStep<TempDirContext & VersionContext
     for (const pkg of ctx.packages) {
       siblingVersions.set(pkg.name, ctx.versionBumps.get(pkg.name)?.to ?? pkg.version);
     }
+
+    // A `--filter` can leave a workspace: dependency outside the publish set.
+    // Fall back to the sibling's current version in the workspace (assumed
+    // already published at that version) instead of failing the release.
+    // Resolved lazily — only pay the extra glob when a miss actually occurs.
+    let workspaceVersions: Map<string, string> | undefined;
+    const resolveSiblingVersion = async (depName: string): Promise<string | undefined> => {
+      if (siblingVersions.has(depName)) return siblingVersions.get(depName);
+      if (!workspaceVersions) {
+        workspaceVersions = new Map(
+          (await resolvePackages(ctx.rootDir, ctx.config)).map(p => [p.name, p.version])
+        );
+      }
+      return workspaceVersions.get(depName);
+    };
 
     for (const pkg of ctx.packages) {
       const tempDir = ctx.tempDirs.get(pkg.name);
@@ -65,10 +83,10 @@ export const modifyPackageJsonStep: PipelineStep<TempDirContext & VersionContext
         if (!deps) continue;
         for (const [depName, range] of Object.entries(deps)) {
           if (!range.startsWith('workspace:')) continue;
-          const siblingVersion = siblingVersions.get(depName);
+          const siblingVersion = await resolveSiblingVersion(depName);
           if (!siblingVersion) {
             throw new Error(
-              `${pkg.name}: ${field}."${depName}" uses "${range}" but ${depName} is not in the publish set — cannot resolve the workspace protocol. Publish it together (drop --filter) or replace the range with a concrete version.`
+              `${pkg.name}: ${field}."${depName}" uses "${range}" but ${depName} was not found in the workspace — cannot resolve the workspace protocol. Replace the range with a concrete version.`
             );
           }
           const resolved = resolveWorkspaceRange(range, siblingVersion);

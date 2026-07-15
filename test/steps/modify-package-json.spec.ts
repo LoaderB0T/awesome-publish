@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { modifyPackageJsonStep } from '../../src/steps/modify-package-json.js';
@@ -132,12 +132,47 @@ describe('modifyPackageJsonStep', () => {
     expect(result.dependencies.other).toBe('^0.9.0'); // caret + current version
   });
 
-  it('throws when a workspace dep is not in the publish set', async () => {
+  it('falls back to the sibling version in the workspace when it is outside the publish set', async () => {
+    // Build a real workspace root: root package.json with a `packages/*` glob and
+    // a sibling package that is NOT in the (filtered) publish set.
+    const root = mkdtempSync(join(tmpdir(), 'ap-modify-ws-'));
+    writeFileSync(
+      join(root, 'package.json'),
+      JSON.stringify({ name: 'root', version: '0.0.0', private: true, workspaces: ['packages/*'] })
+    );
+    const siblingDir = join(root, 'packages', 'sibling');
+    mkdirSync(siblingDir, { recursive: true });
+    writeFileSync(
+      join(siblingDir, 'package.json'),
+      JSON.stringify({ name: 'sibling', version: '3.1.4' })
+    );
+
+    const { tempDir, ctx } = setup({
+      name: 'test',
+      version: '1.0.0',
+      dependencies: { sibling: 'workspace:^' },
+    });
+    (ctx as any).rootDir = root;
+
+    await modifyPackageJsonStep.execute(ctx as any);
+    const result = JSON.parse(readFileSync(join(tempDir, 'package.json'), 'utf-8'));
+    expect(result.dependencies.sibling).toBe('^3.1.4');
+  });
+
+  it('throws when a workspace dep is not found anywhere in the workspace', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'ap-modify-ws-'));
+    writeFileSync(
+      join(root, 'package.json'),
+      JSON.stringify({ name: 'root', version: '0.0.0', private: true })
+    );
     const { ctx } = setup({
       name: 'test',
       version: '1.0.0',
       dependencies: { missing: 'workspace:*' },
     });
-    await expect(modifyPackageJsonStep.execute(ctx as any)).rejects.toThrow(/workspace protocol/);
+    (ctx as any).rootDir = root;
+    await expect(modifyPackageJsonStep.execute(ctx as any)).rejects.toThrow(
+      /not found in the workspace/
+    );
   });
 });
