@@ -1,0 +1,6 @@
+src
+.vscode
+.oxlintrc.json
+.oxfmtrc.json
+.editorconfig
+tsconfig.json

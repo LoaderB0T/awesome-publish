@@ -1,0 +1,7 @@
+node_modules
+lib
+type-compat
+junit.xml
+log.txt
+.claude/settings.local.json
+test-project
