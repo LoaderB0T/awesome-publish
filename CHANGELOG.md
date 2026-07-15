@@ -3,14 +3,11 @@
 ## 0.0.3 (2026-07-15)
 
 - publish dir
-- initial commit
 
 ## 0.0.2 (2026-07-14)
 
-### Features
+- fixes
 
-- v1 release-readiness fixes, features, and docs
+## 0.0.1 (2026-07-14)
 
-### Chores
-
-- enforce LF via .gitattributes + husky pre-push checks
+- initial commit
