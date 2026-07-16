@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.0.6 (2026-07-16)
+
+- Version bump
+
 ## 0.0.5 (2026-07-16)
 
 - Version bump
