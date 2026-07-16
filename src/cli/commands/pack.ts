@@ -7,19 +7,20 @@ import { buildPipeline } from '../../pipeline/build-pipeline.js';
 import { runPipeline } from '../../pipeline/pipeline.js';
 import { assertGitClean } from '../git-check.js';
 import { setDebug, debug } from '../../services/debug.js';
+import { isCiEnv } from '../../services/ci.js';
 
 export const packCommand = defineCommand({
   meta: { name: 'pack', description: 'Pack packages locally without publishing' },
   args: {
     ...sharedArgs,
-    bump: { type: 'string', description: 'Version bump type (patch|minor|major)' },
+    bump: { type: 'string', description: 'Version bump type (patch|minor|major|next)' },
     out: { type: 'string', description: 'Output directory', default: './awesome-publish-pack' },
   },
   async run({ args }) {
     if (args.debug) setDebug(true);
 
     const rootDir = process.cwd();
-    const isCi = args.ci || !!process.env.CI || !!process.env.GITHUB_ACTIONS;
+    const isCi = isCiEnv(args.ci);
 
     debug('pack', 'rootDir', rootDir);
     debug('pack', 'ci', isCi, 'out', args.out);

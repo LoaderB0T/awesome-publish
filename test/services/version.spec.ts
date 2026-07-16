@@ -70,6 +70,25 @@ describe('bumpVersion', () => {
   });
 });
 
+describe('bumpVersion next (prerelease churn)', () => {
+  it('switches a differing prerelease line to next.0', () => {
+    expect(bumpVersion('0.0.1-pre7', 'next')).toBe('0.0.1-next.0');
+  });
+
+  it('increments an existing next prerelease', () => {
+    expect(bumpVersion('0.0.1-next.0', 'next')).toBe('0.0.1-next.1');
+  });
+
+  it('takes a stable version to the next patch prerelease', () => {
+    expect(bumpVersion('0.0.1', 'next')).toBe('0.0.2-next.0');
+    expect(bumpVersion('1.2.3', 'next')).toBe('1.2.4-next.0');
+  });
+
+  it('never graduates a 0.x package (zeroBased is irrelevant)', () => {
+    expect(bumpVersion('0.9.9', 'next', { zeroBased: true })).toBe('0.9.10-next.0');
+  });
+});
+
 describe('assertNoDowngrade', () => {
   it('allows an increase', () => {
     expect(() => assertNoDowngrade('1.2.3', '1.2.4')).not.toThrow();
@@ -97,6 +116,12 @@ describe('highestBump', () => {
   it('returns same when equal', () => {
     expect(highestBump('patch', 'patch')).toBe('patch');
   });
+
+  it('ranks next below every graduating bump', () => {
+    expect(highestBump('next', 'patch')).toBe('patch');
+    expect(highestBump('next', 'major')).toBe('major');
+    expect(highestBump('next', 'next')).toBe('next');
+  });
 });
 
 describe('validateBumpType', () => {
@@ -104,6 +129,7 @@ describe('validateBumpType', () => {
     expect(validateBumpType('patch')).toBe('patch');
     expect(validateBumpType('minor')).toBe('minor');
     expect(validateBumpType('major')).toBe('major');
+    expect(validateBumpType('next')).toBe('next');
   });
 
   it('throws on invalid bump type', () => {

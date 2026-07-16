@@ -17,6 +17,7 @@ import {
   extractPreIdentifier,
   resolvePreVersion,
   assertNoDowngrade,
+  type BumpType,
 } from '../services/version.js';
 import { debug } from '../services/debug.js';
 
@@ -152,13 +153,21 @@ export const determineVersionStep: PipelineStep<
     // Attach the stashed previous tags and guard against downgrades on the way
     // out, for every resolution path.
     const finalize = (resolved: Map<string, VersionBump>): VersionContext => {
-      for (const bump of resolved.values()) assertNoDowngrade(bump.from, bump.to);
+      for (const bump of resolved.values()) {
+        // A `next` bump deliberately switches the prerelease line (e.g.
+        // 0.0.1-pre7 → 0.0.1-next.0), which semver ranks as LOWER because "next"
+        // < "pre" alphabetically. That's intentional churn, not a downgrade, so
+        // skip the guard for next bumps; the next.N → next.N+1 steps increase
+        // normally anyway.
+        if (bump.type === 'next') continue;
+        assertNoDowngrade(bump.from, bump.to);
+      }
       return { versionBumps: resolved, isPrerelease: !!preId, previousTags };
     };
 
     // 1. Changesets take priority
     if (ctx.config.changesets.enabled && changesets?.length) {
-      const bumpTypes = new Map<string, 'patch' | 'minor' | 'major'>();
+      const bumpTypes = new Map<string, BumpType>();
 
       for (const cs of changesets) {
         for (const release of cs.releases) {
@@ -288,12 +297,12 @@ export const determineVersionStep: PipelineStep<
     for (const pkg of ctx.packages) {
       const selected = await AwesomeLogger.prompt('choice', {
         text: `Bump type for ${pkg.name} (current: ${pkg.version}):`,
-        options: ['patch', 'minor', 'major', 'skip'],
+        options: ['patch', 'minor', 'major', 'next', 'skip'],
       }).result;
 
       if (selected === 'skip') continue;
 
-      const type = selected as 'patch' | 'minor' | 'major';
+      const type = selected as BumpType;
       bumps.set(pkg.name, {
         packageName: pkg.name,
         from: pkg.version,

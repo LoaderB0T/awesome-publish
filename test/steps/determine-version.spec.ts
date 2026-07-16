@@ -92,6 +92,32 @@ describe('determineVersionStep', () => {
     });
   });
 
+  it('a next changeset churns the prerelease line without tripping the downgrade guard', async () => {
+    // 0.0.1-pre7 → 0.0.1-next.0 is semver-LOWER ("next" < "pre"), so the guard
+    // must be skipped for next bumps or this would throw "Refusing to publish a
+    // downgrade".
+    const ctx = makeCtx({
+      changesets: [{ id: 'n', summary: 'nightly', releases: [{ name: 'pkg-a', type: 'next' }] }],
+      packages: [
+        {
+          name: 'pkg-a',
+          version: '0.0.1-pre7',
+          dir: '/tmp/a',
+          packageJson: {},
+          config: {} as ResolvedConfig,
+        },
+      ],
+    });
+    ctx.config.changesets = { enabled: true, enforceInPR: false };
+
+    const result = await determineVersionStep.execute(ctx as any);
+    expect(result.versionBumps.get('pkg-a')).toMatchObject({
+      from: '0.0.1-pre7',
+      to: '0.0.1-next.0',
+      type: 'next',
+    });
+  });
+
   it('is a no-op (empty bumps) in CI when changesets enabled but none present', async () => {
     const ctx = makeCtx();
     ctx.config.changesets = { enabled: true, enforceInPR: false };

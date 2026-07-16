@@ -1,4 +1,5 @@
 import type { ResolvedConfig } from './config.js';
+import type { BumpType } from '../services/version.js';
 
 export interface PackageInfo {
   name: string;
@@ -12,7 +13,7 @@ export interface VersionBump {
   packageName: string;
   from: string;
   to: string;
-  type: 'patch' | 'minor' | 'major';
+  type: BumpType;
   prerelease?: string;
 }
 

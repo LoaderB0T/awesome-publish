@@ -1,7 +1,12 @@
 import semver from 'semver';
 import { withRetry, isTransientError } from './retry.js';
 
-const BUMP_ORDER = { patch: 0, minor: 1, major: 2 } as const;
+// `next` is the prerelease-churn bump — weaker than any graduating bump, so if a
+// package has both a `next` and a patch/minor/major changeset in one release, the
+// graduating bump wins (and the release leaves the prerelease line).
+const BUMP_ORDER = { next: -1, patch: 0, minor: 1, major: 2 } as const;
+
+export type BumpType = 'patch' | 'minor' | 'major' | 'next';
 
 export interface BumpOptions {
   /**
@@ -20,12 +25,20 @@ export interface BumpOptions {
  * (1.0.0-beta.1 + patch → 1.0.0, not 1.0.1) and build metadata is handled
  * correctly. See {@link BumpOptions.zeroBased} for pre-1.0 handling.
  */
-export function bumpVersion(
-  version: string,
-  type: 'patch' | 'minor' | 'major',
-  options: BumpOptions = {}
-): string {
-  let effectiveType = type;
+export function bumpVersion(version: string, type: BumpType, options: BumpOptions = {}): string {
+  // `next`: advance the prerelease under the `next` identifier and never
+  // graduate. 0.0.1-pre7 → 0.0.1-next.0, 0.0.1-next.0 → 0.0.1-next.1,
+  // 0.0.1 → 0.0.2-next.0. zeroBased is irrelevant (a prerelease bump can't
+  // graduate a 0.x package).
+  if (type === 'next') {
+    const pre = semver.inc(version, 'prerelease', 'next');
+    if (!pre) {
+      throw new Error(`Invalid version: "${version}" — expected semver format (x.y.z)`);
+    }
+    return pre;
+  }
+
+  let effectiveType: 'patch' | 'minor' | 'major' = type;
   if (options.zeroBased && semver.major(version) === 0) {
     if (type === 'major') effectiveType = 'minor';
     else if (type === 'minor') effectiveType = 'patch';
@@ -53,23 +66,20 @@ export function assertNoDowngrade(from: string, to: string): void {
 /**
  * Return the higher of two bump types.
  */
-export function highestBump(
-  a: 'patch' | 'minor' | 'major',
-  b: 'patch' | 'minor' | 'major'
-): 'patch' | 'minor' | 'major' {
+export function highestBump(a: BumpType, b: BumpType): BumpType {
   return BUMP_ORDER[a] >= BUMP_ORDER[b] ? a : b;
 }
 
-const VALID_BUMPS = new Set(['patch', 'minor', 'major']);
+const VALID_BUMPS = new Set(['patch', 'minor', 'major', 'next']);
 
 /**
  * Validate a bump type string from user input. Returns the validated type or throws.
  */
-export function validateBumpType(value: string): 'patch' | 'minor' | 'major' {
+export function validateBumpType(value: string): BumpType {
   if (!VALID_BUMPS.has(value)) {
-    throw new Error(`Invalid bump type: "${value}" — must be patch, minor, or major`);
+    throw new Error(`Invalid bump type: "${value}" — must be patch, minor, major, or next`);
   }
-  return value as 'patch' | 'minor' | 'major';
+  return value as BumpType;
 }
 
 const PRE_ID_RE = /^[a-zA-Z][a-zA-Z0-9-]*$/;

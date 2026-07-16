@@ -7,7 +7,7 @@ import { resolveConfigForCommand } from '../../config/load-config.js';
 import { detectPackageManager } from '../../services/package-manager.js';
 import { resolvePackages } from '../../services/workspace.js';
 import { GitService } from '../../services/git.js';
-import { validateBumpType } from '../../services/version.js';
+import { validateBumpType, type BumpType } from '../../services/version.js';
 import { setDebug, debug } from '../../services/debug.js';
 
 function generateId(): string {
@@ -15,7 +15,7 @@ function generateId(): string {
 }
 
 function formatChangeset(
-  releases: { name: string; type: 'patch' | 'minor' | 'major' }[],
+  releases: { name: string; type: BumpType }[],
   summary: string,
   meta: { author?: string | null; email?: string | null; timestamp: string }
 ): string {
@@ -53,7 +53,7 @@ export const changesetCommand = defineCommand({
     },
     type: {
       type: 'string' as const,
-      description: 'Bump type for --ci mode (patch|minor|major)',
+      description: 'Bump type for --ci mode (patch|minor|major|next)',
     },
     summary: { type: 'string' as const, description: 'Changeset summary for --ci mode' },
     packages: {
@@ -139,13 +139,13 @@ export const changesetCommand = defineCommand({
       }
     }
 
-    const releases: { name: string; type: 'patch' | 'minor' | 'major' }[] = [];
+    const releases: { name: string; type: BumpType }[] = [];
     let summary: string;
 
     if (nonInteractive) {
       // CI mode: everything comes from flags. One bump type applies to all
       // selected packages (edit the file afterwards for per-package types).
-      if (!args.type) throw new Error('--ci requires --type=patch|minor|major');
+      if (!args.type) throw new Error('--ci requires --type=patch|minor|major|next');
       if (!args.summary?.trim()) throw new Error('--ci requires --summary');
       const type = validateBumpType(args.type);
 
@@ -182,9 +182,9 @@ export const changesetCommand = defineCommand({
       for (const name of selectedNames) {
         const bumpType = await AwesomeLogger.prompt('choice', {
           text: `Bump type for ${name}:`,
-          options: ['patch', 'minor', 'major'],
+          options: ['patch', 'minor', 'major', 'next'],
         }).result;
-        releases.push({ name, type: bumpType as 'patch' | 'minor' | 'major' });
+        releases.push({ name, type: bumpType as BumpType });
       }
 
       // Ask for summary

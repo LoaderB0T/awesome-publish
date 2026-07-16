@@ -149,6 +149,27 @@ The bump is resolved in this priority order:
 
 In CI with none of the above, the run is a clean no-op (nothing to release).
 
+The bump type is one of `patch`, `minor`, `major`, or `next` — valid anywhere a
+bump type is accepted: `--bump`, `changeset --type`, changeset files
+(`"pkg": next`), and the interactive prompts.
+
+### The `next` bump — continuous prereleases
+
+`next` advances the prerelease line under the `next` identifier instead of a
+graduating semver bump, so a package keeps shipping prereleases (typically under
+the `next` dist-tag) without ever reaching a stable version:
+
+- `0.0.1-pre7` → `0.0.1-next.0` (switches the prerelease line)
+- `0.0.1-next.0` → `0.0.1-next.1` (increments)
+- `0.0.1` → `0.0.2-next.0` (stable → next patch prerelease)
+
+`next` is the weakest bump: if a package has both a `next` and a
+`patch`/`minor`/`major` bump in one release, the graduating bump wins (and the
+release leaves the prerelease line). Switching an existing prerelease identifier
+to `next` is semver-lower (`next` < `pre` alphabetically); that's intentional
+churn, so the downgrade guard is skipped for `next` bumps. Pair it with
+`--tag next` on publish to keep `latest` clean.
+
 ### Pre-1.0 (0.x) versions
 
 For automatic bumps (changesets and conventional commits) a package on `0.x` is

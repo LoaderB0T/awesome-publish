@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { defineCommand, runMain } from 'citty';
+import { AwesomeLogger } from 'awesome-logging';
+import { isCiEnv } from '../services/ci.js';
 import { publishCommand } from './commands/publish.js';
 import { packCommand } from './commands/pack.js';
 import { versionCommand } from './commands/version.js';
@@ -40,5 +42,10 @@ const main = defineCommand({
     status: statusCommand,
   },
 });
+
+// Restricted logging in CI: the interactive spinner/checklist output uses cursor
+// control codes that are unreadable in CI logs. Flip it before any logger runs,
+// honoring both the standard CI env vars and an explicit `--ci` flag.
+AwesomeLogger.restrictedLogging = isCiEnv(process.argv.includes('--ci'));
 
 void runMain(main);

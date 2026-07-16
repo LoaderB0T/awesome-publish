@@ -7,18 +7,19 @@ import { buildPipeline } from '../../pipeline/build-pipeline.js';
 import { runPipeline } from '../../pipeline/pipeline.js';
 import { assertGitClean } from '../git-check.js';
 import { setDebug, debug } from '../../services/debug.js';
+import { isCiEnv } from '../../services/ci.js';
 
 export const versionCommand = defineCommand({
   meta: { name: 'version', description: 'Bump package versions without publishing' },
   args: {
     ...sharedArgs,
-    bump: { type: 'string', description: 'Version bump type (patch|minor|major)' },
+    bump: { type: 'string', description: 'Version bump type (patch|minor|major|next)' },
   },
   async run({ args }) {
     if (args.debug) setDebug(true);
 
     const rootDir = process.cwd();
-    const isCi = args.ci || !!process.env.CI || !!process.env.GITHUB_ACTIONS;
+    const isCi = isCiEnv(args.ci);
 
     debug('version', 'rootDir', rootDir);
     debug('version', 'ci', isCi);

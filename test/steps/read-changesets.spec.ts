@@ -59,6 +59,30 @@ describe('readChangesetsStep', () => {
     expect(result.changesets).toEqual([]);
   });
 
+  it('accepts single-quoted, double-quoted, and unquoted package names', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'ap-cs-quotes-'));
+    const file = join(dir, 'quotes.md');
+    // @changesets/cli writes single quotes; some hand-authored files use double
+    // or none. All three are valid changesets YAML and must parse.
+    writeFileSync(
+      file,
+      '---\n\'@scope/single\': patch\n"@scope/double": minor\n@scope/bare: major\n---\nmixed quoting\n'
+    );
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const parsed = parseChangesetFile(file);
+      expect(parsed?.releases).toEqual([
+        { name: '@scope/single', type: 'patch' },
+        { name: '@scope/double', type: 'minor' },
+        { name: '@scope/bare', type: 'major' },
+      ]);
+      // No warnings — every line was valid.
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it('warns about (but does not silently drop) a malformed frontmatter line beside a valid one (H1)', () => {
     const dir = mkdtempSync(join(tmpdir(), 'ap-cs-'));
     const file = join(dir, 'typo.md');

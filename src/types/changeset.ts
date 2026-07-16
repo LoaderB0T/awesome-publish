@@ -1,3 +1,5 @@
+import type { BumpType } from '../services/version.js';
+
 export interface ChangesetMeta {
   author?: string;
   email?: string;
@@ -9,7 +11,7 @@ export interface Changeset {
   summary: string;
   releases: {
     name: string;
-    type: 'patch' | 'minor' | 'major';
+    type: BumpType;
   }[];
   meta?: ChangesetMeta;
 }

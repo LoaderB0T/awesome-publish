@@ -4,6 +4,7 @@ import { Phases } from '../pipeline/phases.js';
 import type { PipelineStep } from '../pipeline/step.js';
 import type { ChangesetContext } from '../pipeline/context.js';
 import type { Changeset, ChangesetMeta } from '../types/changeset.js';
+import type { BumpType } from '../services/version.js';
 import { debug } from '../services/debug.js';
 
 function parseMetaComments(body: string): { meta: ChangesetMeta; summary: string } {
@@ -37,18 +38,21 @@ export function parseChangesetFile(filePath: string): Changeset | null {
 
   for (const line of frontmatter.split('\n')) {
     if (!line.trim()) continue; // blank frontmatter line — ignore silently
-    const lineMatch = line.match(/^"(.+)":\s*(patch|minor|major)\s*$/);
+    // The package name may be double-quoted ("pkg"), single-quoted ('pkg', the
+    // style @changesets/cli writes) or unquoted (pkg) — all valid changesets
+    // YAML. The `\2` backreference makes the closing quote match the opening one.
+    const lineMatch = line.match(/^\s*(["']?)(.+?)\1\s*:\s*(patch|minor|major|next)\s*$/);
     if (lineMatch) {
-      releases.push({ name: lineMatch[1], type: lineMatch[2] as 'patch' | 'minor' | 'major' });
+      releases.push({ name: lineMatch[2], type: lineMatch[3] as BumpType });
     } else {
-      // A non-blank line that isn't a valid `"pkg": patch|minor|major` — likely a
-      // typo (`"pkg": pathc`) or unquoted name. Warn PER LINE: a sibling valid
-      // line makes releases.length > 0, so the whole-file warning below never
-      // fires and this release intent would otherwise vanish when the changeset
-      // file is deleted after a successful publish.
+      // A non-blank line that isn't a valid `pkg: patch|minor|major` — likely a
+      // typo (`"pkg": pathc`). Warn PER LINE: a sibling valid line makes
+      // releases.length > 0, so the whole-file warning below never fires and this
+      // release intent would otherwise vanish when the changeset file is deleted
+      // after a successful publish.
       console.warn(
         `⚠ Changeset ${basename(filePath)}: ignoring invalid frontmatter line "${line.trim()}" ` +
-          `(expected \`"package-name": patch|minor|major\`).`
+          `(expected \`package-name: patch|minor|major|next\`, name optionally quoted).`
       );
     }
   }
@@ -59,7 +63,7 @@ export function parseChangesetFile(filePath: string): Changeset | null {
     // dropping a file the user believes queues a release.
     console.warn(
       `⚠ Changeset ${basename(filePath)} has frontmatter but no valid release line ` +
-        `(expected \`"package-name": patch|minor|major\`) — ignoring.`
+        `(expected \`package-name: patch|minor|major|next\`, name optionally quoted) — ignoring.`
     );
     return null;
   }

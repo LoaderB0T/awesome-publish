@@ -8,12 +8,13 @@ import { runPipeline } from '../../pipeline/pipeline.js';
 import { validatePreIdentifier } from '../../services/version.js';
 import { assertGitClean } from '../git-check.js';
 import { setDebug, debug } from '../../services/debug.js';
+import { isCiEnv } from '../../services/ci.js';
 
 export const publishCommand = defineCommand({
   meta: { name: 'publish', description: 'Publish packages to npm' },
   args: {
     ...sharedArgs,
-    bump: { type: 'string', description: 'Version bump type (patch|minor|major)' },
+    bump: { type: 'string', description: 'Version bump type (patch|minor|major|next)' },
     tag: { type: 'string', description: 'npm dist-tag (e.g., next, beta)' },
     pre: {
       type: 'string',
@@ -28,7 +29,7 @@ export const publishCommand = defineCommand({
     if (args.debug) setDebug(true);
 
     const rootDir = process.cwd();
-    const isCi = args.ci || !!process.env.CI || !!process.env.GITHUB_ACTIONS;
+    const isCi = isCiEnv(args.ci);
     const dryRun = args['dry-run'] ?? false;
     const pre = args.pre ? validatePreIdentifier(args.pre) : undefined;
 

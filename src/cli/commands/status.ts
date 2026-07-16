@@ -6,7 +6,7 @@ import { detectPackageManager } from '../../services/package-manager.js';
 import { resolvePackages } from '../../services/workspace.js';
 import { GitService } from '../../services/git.js';
 import { determineBumpFromCommits } from '../../services/conventional-commits.js';
-import { bumpVersion, highestBump } from '../../services/version.js';
+import { bumpVersion, highestBump, type BumpType } from '../../services/version.js';
 import { tagMatchPrefix } from '../../steps/git-tag.js';
 import { parseChangesetFile } from '../../steps/read-changesets.js';
 import { setDebug, debug } from '../../services/debug.js';
@@ -48,7 +48,7 @@ export const statusCommand = defineCommand({
 
     // Effective bump per package, using the SAME precedence as publish:
     // changesets first, then conventional commits. (status has no --bump/--pre.)
-    const changesetBumpTypes = new Map<string, 'patch' | 'minor' | 'major'>();
+    const changesetBumpTypes = new Map<string, BumpType>();
     for (const cs of changesets) {
       for (const r of cs.releases) {
         const existing = changesetBumpTypes.get(r.name);
@@ -57,7 +57,7 @@ export const statusCommand = defineCommand({
     }
     const effectiveBumps = new Map<
       string,
-      { from: string; to: string; type: 'patch' | 'minor' | 'major'; source: string }
+      { from: string; to: string; type: BumpType; source: string }
     >();
 
     // Show packages
@@ -71,7 +71,7 @@ export const statusCommand = defineCommand({
         : await git.getAllCommits();
       const commitCount = commits.length;
 
-      let type: 'patch' | 'minor' | 'major' | undefined;
+      let type: BumpType | undefined;
       let source = '';
       if (config.changesets.enabled && changesetBumpTypes.has(pkg.name)) {
         type = changesetBumpTypes.get(pkg.name);
