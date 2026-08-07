@@ -71,7 +71,11 @@ export class GitService {
       const trimmed = record.trim();
       if (!trimmed) continue;
       const [hash, message = '', body = ''] = trimmed.split('\x1f');
-      commits.push({ hash: hash.trim(), message: message.trim(), body: body.trim() });
+      commits.push({
+        hash: hash.trim(),
+        message: message.trim(),
+        body: body.trim(),
+      });
     }
     return commits;
   }
@@ -182,20 +186,41 @@ export class GitService {
     }
   }
 
+  /**
+   * Files changed since `branch` — committed, staged, unstaged AND untracked.
+   * `git diff branch...HEAD` only compares commits, so a dirty tree on main (or a
+   * branch whose work isn't committed yet) looks like "no changes". Diffing the
+   * merge-base against the WORKING TREE (two-dot, no HEAD) covers committed +
+   * staged + unstaged tracked files; `ls-files --others` adds new files.
+   */
   public async getChangedFilesSince(branch: string): Promise<string[]> {
+    let base = branch;
     try {
-      const { stdout } = await this.exec('git', ['diff', '--name-only', `${branch}...HEAD`]);
-      return stdout.trim().split('\n').filter(Boolean);
+      const { stdout } = await this.exec('git', ['merge-base', branch, 'HEAD']);
+      base = stdout.trim() || branch;
     } catch {
-      // Fallback: branch might not exist, try without three-dot
-      const { stdout } = await this.exec('git', ['diff', '--name-only', branch]);
-      return stdout.trim().split('\n').filter(Boolean);
+      // Branch doesn't exist (or no HEAD yet) — diff against it directly below.
     }
+    const [tracked, untracked] = await Promise.all([
+      this.exec('git', ['diff', '--name-only', base]).then(r => r.stdout),
+      this.exec('git', ['ls-files', '--others', '--exclude-standard']).then(r => r.stdout),
+    ]);
+    return [
+      ...new Set(
+        `${tracked}\n${untracked}`
+          .split('\n')
+          .map(f => f.trim())
+          .filter(Boolean)
+      ),
+    ];
   }
 
   private async exec(cmd: string, args: string[]): Promise<{ stdout: string; stderr: string }> {
     // execFile defaults to a 1 MiB stdout buffer; `git log` over a long history
     // (first release on an established repo) easily exceeds that. Raise it.
-    return execFileAsync(cmd, args, { cwd: this.cwd, maxBuffer: 256 * 1024 * 1024 });
+    return execFileAsync(cmd, args, {
+      cwd: this.cwd,
+      maxBuffer: 256 * 1024 * 1024,
+    });
   }
 }

@@ -50,6 +50,29 @@ describe('GitService', () => {
     expect(commits[0].message).toBe('second commit');
   });
 
+  it('getChangedFilesSince includes uncommitted and untracked files', async () => {
+    const branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+      cwd: dir,
+    })
+      .toString()
+      .trim();
+    // Dirty tree on the base branch itself — nothing committed on top of it.
+    writeFileSync(join(dir, 'file.txt'), 'modified');
+    writeFileSync(join(dir, 'untracked.txt'), 'new');
+    expect((await git.getChangedFilesSince(branch)).sort()).toEqual(['file.txt', 'untracked.txt']);
+
+    // Feature branch: one commit + one still-uncommitted file.
+    execFileSync('git', ['checkout', '-b', 'feature'], { cwd: dir });
+    execFileSync('git', ['add', 'file.txt'], { cwd: dir });
+    execFileSync('git', ['commit', '-m', 'committed change'], { cwd: dir });
+    writeFileSync(join(dir, 'pending.txt'), 'pending');
+    expect((await git.getChangedFilesSince(branch)).sort()).toEqual([
+      'file.txt',
+      'pending.txt',
+      'untracked.txt',
+    ]);
+  });
+
   it('returns null for getLatestTag when no tags exist', async () => {
     const tag = await git.getLatestTag();
     expect(tag).toBeNull();
