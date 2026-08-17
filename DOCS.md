@@ -324,7 +324,7 @@ notes.
 Changeset summaries drive the notes when there are any, with commits as
 supporting detail — the same precedence the changelog uses.
 
-Commit ranges start at the previous release *of the same kind*: a stable release
+Commit ranges start at the previous release _of the same kind_: a stable release
 diffs against the last stable tag, skipping any prereleases published in between,
 while a prerelease diffs against the previous prerelease. Without that, promoting
 `0.0.3-next.0` to `0.0.3` would diff against the prerelease, find nothing, and
