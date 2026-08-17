@@ -26,6 +26,17 @@ export const gitCommitStep: PipelineStep<VersionContext & { rootDir: string }> =
     const git = new GitService(ctx.rootDir);
     const bumps = [...ctx.versionBumps.values()];
 
+    // A clean tree means a previous run already committed this release — the
+    // normal state of a `--resume`. `git commit` would exit non-zero ("nothing
+    // to commit") and fail the run. Still push: the prior run may have died
+    // exactly between committing and pushing, and a push with nothing to send
+    // is a no-op.
+    if (await git.isWorkingTreeClean()) {
+      debug('git-commit', 'nothing to commit; pushing in case a prior run did not');
+      await git.pushCurrentBranch();
+      return;
+    }
+
     const message =
       bumps.length === 1
         ? `chore: release v${bumps[0].to}`

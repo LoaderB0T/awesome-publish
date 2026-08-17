@@ -1,5 +1,5 @@
 import semver from 'semver';
-import { withRetry, isTransientError } from './retry.js';
+import { fetchPackageVersions } from './registry.js';
 
 // `next` is the prerelease-churn bump — weaker than any graduating bump, so if a
 // package has both a `next` and a patch/minor/major changeset in one release, the
@@ -131,37 +131,12 @@ export async function resolvePreVersion(
   const prefix = `${baseVersion}-${identifier}.`;
 
   try {
-    const url = `${registry.replace(/\/$/, '')}/${encodeURIComponent(packageName)}`;
-    const headers: Record<string, string> = {
-      Accept: 'application/vnd.npm.install-v1+json',
-    };
+    const versions = await fetchPackageVersions(packageName, registry, fetchFn);
 
-    const token = process.env.NPM_TOKEN;
-    if (token) {
-      headers.Authorization = `Bearer ${token}`;
-    }
-
-    const response = await withRetry(() => fetchFn(url, { headers }), {
-      label: `registry query ${packageName}`,
-      shouldRetry: isTransientError,
-    });
-
-    if (response.status === 404) {
+    // Package not on the registry at all — this is its first prerelease.
+    if (versions === null) {
       return `${prefix}0`;
     }
-
-    if (response.status === 401 || response.status === 403) {
-      throw new Error(
-        `Registry returned ${response.status} for ${packageName}. Set NPM_TOKEN env var for private registries.`
-      );
-    }
-
-    if (!response.ok) {
-      throw new Error(`Registry returned ${response.status} for ${packageName}`);
-    }
-
-    const data = (await response.json()) as { versions?: Record<string, unknown> };
-    const versions = data.versions ? Object.keys(data.versions) : [];
 
     let maxN = -1;
     for (const v of versions) {

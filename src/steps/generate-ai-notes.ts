@@ -5,6 +5,7 @@ import type { PipelineStep } from '../pipeline/step.js';
 import type { VersionContext, AiNotesContext } from '../pipeline/context.js';
 import { createAiProvider } from '../services/ai/factory.js';
 import { GitService } from '../services/git.js';
+import { resolveReleaseCommit } from '../services/release-state.js';
 import { debug } from '../services/debug.js';
 
 function interpolatePrompt(
@@ -86,13 +87,22 @@ export const generateAiNotesStep: PipelineStep<
 
         // Monorepo → scope commits to the package dir. First release (no prior
         // tag) → summarize the whole history.
-        const scope =
-          (ctx.totalPackageCount ?? ctx.packages.length) > 1
-            ? relative(ctx.rootDir, pkg.dir)
-            : undefined;
+        const packageCount = ctx.totalPackageCount ?? ctx.packages.length;
+        const scope = packageCount > 1 ? relative(ctx.rootDir, pkg.dir) : undefined;
+        // End the range at the release commit. On a normal run its tag does not
+        // exist yet so this resolves to HEAD (the pre-release-commit state, as
+        // before); on a `--resume` the tag pins it, so the notes summarize this
+        // release rather than everything that landed since.
+        const head =
+          (await resolveReleaseCommit(git, {
+            packageName: pkg.name,
+            version: bump.to,
+            packageCount,
+            config: ctx.config,
+          })) ?? 'HEAD';
         const commits = latestTag
-          ? await git.getCommitsSinceTag(latestTag, scope)
-          : await git.getAllCommits(scope);
+          ? await git.getCommitsSinceTag(latestTag, scope, head)
+          : await git.getAllCommits(scope, head);
         debug('ai-notes-generate', `${pkg.name}: ${commits.length} commits since tag`);
 
         const commitList = commits.map(c => `- ${c.message}`).join('\n');

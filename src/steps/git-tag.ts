@@ -1,3 +1,4 @@
+import semver from 'semver';
 import { Phases } from '../pipeline/phases.js';
 import type { PipelineStep } from '../pipeline/step.js';
 import type { VersionContext } from '../pipeline/context.js';
@@ -27,6 +28,32 @@ export function buildTagName(
  */
 export function tagMatchPrefix(packageName: string, packageCount: number, prefix: string): string {
   return packageCount === 1 ? `${prefix}v` : `${prefix}${packageName}@`;
+}
+
+/**
+ * Inverse of {@link buildTagName}: pull the version back out of a tag, or null
+ * if the tag doesn't belong to this package / isn't valid semver. Used to rank
+ * existing tags when resolving "the release before this one".
+ */
+export function parseTagVersion(
+  tag: string,
+  packageName: string,
+  packageCount: number,
+  prefix: string
+): string | null {
+  const head = tagMatchPrefix(packageName, packageCount, prefix);
+  if (!tag.startsWith(head)) return null;
+  const version = tag.slice(head.length);
+  return semver.valid(version) ? version : null;
+}
+
+/**
+ * Deterministic tag for a `combined` GitHub release, derived from the commit the
+ * release is cut from. A timestamp would make every retry produce a new tag —
+ * and therefore a duplicate release — so the commit is the identity.
+ */
+export function buildCombinedTagName(releaseCommit: string): string {
+  return `release-${releaseCommit.slice(0, 7)}`;
 }
 
 export const gitTagStep: PipelineStep<VersionContext & { rootDir: string }> = {

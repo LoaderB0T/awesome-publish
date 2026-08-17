@@ -19,7 +19,13 @@ export const confirmPublishStep: PipelineStep<VersionContext> = {
 
     console.log('\nPackages to publish:');
     for (const [name, bump] of bumps) {
-      console.log(`  ${name}: ${bump.from} → ${bump.to} (${bump.type})`);
+      // from === to means --resume: no bump is being applied, an unfinished
+      // release of that exact version is being completed.
+      console.log(
+        bump.from === bump.to
+          ? `  ${name}: ${bump.to} (resume unfinished release)`
+          : `  ${name}: ${bump.from} → ${bump.to} (${bump.type})`
+      );
     }
     console.log('');
 

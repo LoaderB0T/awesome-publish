@@ -56,7 +56,7 @@ describe('buildPipeline', () => {
     expect(steps).not.toContain('ai-notes-generate');
   });
 
-  it('generates + publishes AI notes when releases are enabled', () => {
+  it('generates AI notes when releases are enabled (written by the release step itself)', () => {
     const steps = names(
       buildPipeline(
         'publish',
@@ -68,7 +68,9 @@ describe('buildPipeline', () => {
       )
     );
     expect(steps).toContain('ai-notes-generate');
-    expect(steps).toContain('ai-notes-publish');
     expect(steps).toContain('github-release');
+    // Merged into github-release: the notes are part of the create request, not
+    // a second PATCH afterwards.
+    expect(steps).not.toContain('ai-notes-publish');
   });
 });

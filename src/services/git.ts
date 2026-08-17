@@ -45,16 +45,20 @@ export class GitService {
    * Commits since a tag, optionally scoped to a subdirectory (`git log -- dir`)
    * so a monorepo package's changelog/release notes list only its own commits.
    */
-  public async getCommitsSinceTag(tag: string, pathScope?: string): Promise<Commit[]> {
-    return this.logCommits(`${tag}..HEAD`, pathScope);
+  public async getCommitsSinceTag(
+    tag: string,
+    pathScope?: string,
+    head = 'HEAD'
+  ): Promise<Commit[]> {
+    return this.logCommits(`${tag}..${head}`, pathScope);
   }
 
   /**
-   * All commits reachable from HEAD (optionally path-scoped). Used for a
+   * All commits reachable from `head` (optionally path-scoped). Used for a
    * package's first release, when no prior tag exists to diff against.
    */
-  public async getAllCommits(pathScope?: string): Promise<Commit[]> {
-    return this.logCommits('HEAD', pathScope);
+  public async getAllCommits(pathScope?: string, head = 'HEAD'): Promise<Commit[]> {
+    return this.logCommits(head, pathScope);
   }
 
   private async logCommits(range: string, pathScope?: string): Promise<Commit[]> {
@@ -78,6 +82,34 @@ export class GitService {
       });
     }
     return commits;
+  }
+
+  /**
+   * All tags matching a prefix. Unlike {@link getLatestTag} (which is
+   * `git describe`, so it only sees tags reachable from HEAD and returns the
+   * single nearest one) this lists every matching tag, so callers can pick the
+   * highest version *below* a given one — needed when resuming a release whose
+   * own tag already exists.
+   */
+  public async listTags(prefix?: string): Promise<string[]> {
+    const args = ['tag', '--list'];
+    if (prefix) args.push(`${prefix}*`);
+    const { stdout } = await this.exec('git', args);
+    return stdout
+      .split('\n')
+      .map(t => t.trim())
+      .filter(Boolean);
+  }
+
+  /** Commit SHA a tag points at, or null if the tag does not exist. */
+  public async getTagCommit(tag: string): Promise<string | null> {
+    try {
+      // `^{commit}` dereferences annotated tags to their commit.
+      const { stdout } = await this.exec('git', ['rev-list', '-n', '1', tag]);
+      return stdout.trim() || null;
+    } catch {
+      return null;
+    }
   }
 
   public async createTag(tag: string): Promise<void> {

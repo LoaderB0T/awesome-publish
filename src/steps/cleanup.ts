@@ -7,7 +7,7 @@ import { debug } from '../services/debug.js';
 export const cleanupStep: PipelineStep<Partial<TempDirContext>> = {
   name: 'cleanup',
   phase: Phases.CLEANUP,
-  after: [Phases.PUBLISH_NPM, Phases.GITHUB_RELEASE, Phases.AI_NOTES_PUBLISH],
+  after: [Phases.PUBLISH_NPM, Phases.GITHUB_RELEASE],
   before: [],
 
   shouldRun: ctx => ctx.tempDirs != null && ctx.tempDirs.size > 0,

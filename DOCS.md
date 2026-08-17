@@ -84,6 +84,42 @@ before anything is published (when GitHub releases are enabled); `build` runs
 | `--tag`        | npm dist-tag (e.g. `next`, `beta`).                    |
 | `--pre`        | Publish as a prerelease (e.g. `--pre beta`).           |
 | `--provenance` | Publish with npm provenance (OIDC).                    |
+| `--resume`     | Finish a release that failed partway (see below).      |
+
+#### Resuming a failed release
+
+A publish writes to three places — the npm registry, a git tag, a GitHub release
+— and a crash between them leaves a version that exists in some and not others.
+There is no state file to keep: those three places _are_ the state, so
+awesome-publish reads them back.
+
+Every `publish` run checks whether the version currently in `package.json` is
+fully released, and warns if it isn't:
+
+```
+⚠ my-pkg@0.0.3 looks half-released (no GitHub release).
+    Run `awesome-publish publish --resume` to finish it instead of starting a new version.
+```
+
+`--resume` then completes **that** version rather than bumping to a new one: it
+publishes to npm only what the registry is missing, tags only what is untagged,
+and creates only the release that does not exist. Changesets are ignored while
+resuming — they describe the _next_ release. Works the same locally and in CI
+(re-run the workflow with `--resume`); a fresh checkout is fine, since nothing
+depends on the failed run's machine.
+
+Notes:
+
+- `--resume` refuses to run when nothing is in flight, and aborts rather than
+  guessing if the registry or GitHub can't be reached.
+- It skips the clean-working-tree check: a local run that died before committing
+  leaves the bumped `package.json` uncommitted, and that dirty tree _is_ the
+  unfinished release.
+- Without `--resume`, a run whose `package.json` was bumped but never published
+  computes its next version from the last version that actually shipped — so a
+  retry lands on the version it was aiming at instead of skipping one.
+- The build re-runs on a resume. Rebuilding is cheap insurance compared with
+  publishing a tarball assembled from a half-known state.
 
 ### `pack`
 
@@ -241,9 +277,25 @@ Set `github.releases.enabled` and a `mode`:
 
 - `per-package` — one release per package, tagged `pkg@1.2.3` (or `v1.2.3` for
   a single-package repo).
-- `combined` — one release listing all published packages.
+- `combined` — one release listing all published packages, tagged
+  `release-<short-commit-sha>`.
 
-Requires a `GITHUB_TOKEN`. Releases are only created after a successful publish.
+Requires a `GITHUB_TOKEN`. Releases are only created after a successful publish,
+and are pinned to the commit the release was cut from (resolved via the package's
+git tag), not to whatever `HEAD` happens to be — so a `--resume` days later still
+attributes the release correctly.
+
+The combined tag is derived from that commit rather than from the time of the
+run: a timestamp would make every retry produce a new tag, and therefore a
+duplicate release for a release that already exists.
+
+> **Breaking:** combined releases were previously tagged `release-<date>-<time>`.
+> Existing releases keep their old tags; only new ones use the commit-derived
+> form.
+
+`draft: true` is not resumable: a draft has no tag on GitHub until it is
+published, so awesome-publish cannot tell whether the draft for a version
+already exists and will create a second one on a resume.
 
 ## AI release notes
 
@@ -264,6 +316,12 @@ For OpenAI-compatible endpoints, set `provider: 'openai-compatible'` and a
 `{{package}}`, `{{version}}`, `{{from}}`, `{{type}}`, and `{{commits}}` are
 interpolated. Commit messages are treated as untrusted input. If an AI call
 fails, the release continues without notes.
+
+Notes are generated before the release commit (so they summarise the release,
+not the `chore: release` commit) and written as the GitHub release body in the
+same request that creates it — the release is never briefly visible with a raw
+commit list. Notes require `github.releases.enabled`; without a release to
+attach them to, generation is skipped rather than paid for.
 
 ## Prereleases
 

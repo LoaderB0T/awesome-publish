@@ -78,13 +78,20 @@ export function parseChangesetFile(filePath: string): Changeset | null {
   };
 }
 
-export const readChangesetsStep: PipelineStep<{ rootDir: string }, ChangesetContext> = {
+export const readChangesetsStep: PipelineStep<
+  { rootDir: string; cliArgs?: { resume?: boolean } },
+  ChangesetContext
+> = {
   name: 'read-changesets',
   phase: Phases.READ_CHANGESETS,
   after: [],
   before: [Phases.DETERMINE_VERSION],
 
-  shouldRun: ctx => ctx.config.changesets.enabled,
+  // --resume finishes the version already in package.json; changesets describe
+  // the NEXT release, so reading them would only tempt a bump past it. Leaving
+  // `changesets` empty also makes consume-changesets a no-op, so a resumed run
+  // can never delete release intent it isn't acting on.
+  shouldRun: ctx => ctx.config.changesets.enabled && !ctx.cliArgs?.resume,
 
   async execute(ctx): Promise<ChangesetContext> {
     const changesetDir = join(ctx.rootDir, '.changeset');

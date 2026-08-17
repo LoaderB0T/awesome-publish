@@ -3,11 +3,16 @@ import semver from 'semver';
 import { AwesomeLogger } from 'awesome-logging';
 import { Phases } from '../pipeline/phases.js';
 import type { PipelineStep } from '../pipeline/step.js';
-import type { ChangesetContext, VersionContext } from '../pipeline/context.js';
+import type { ChangesetContext, CoreContext, VersionContext } from '../pipeline/context.js';
 import type { VersionBump } from '../types/package-info.js';
 import type { Changeset } from '../types/changeset.js';
 import { GitService } from '../services/git.js';
-import { tagMatchPrefix } from './git-tag.js';
+import { tagMatchPrefix, parseTagVersion } from './git-tag.js';
+import {
+  detectReleaseState,
+  describeMissingSinks,
+  type PackageReleaseState,
+} from '../services/release-state.js';
 import { determineBumpFromCommits } from '../services/conventional-commits.js';
 import {
   bumpVersion,
@@ -87,8 +92,130 @@ async function applyPrerelease(
   }
 }
 
+/**
+ * The tag of the release *before* `version`, for a package whose own tag may
+ * already exist. `getLatestTag` would return the version's own tag on a resume,
+ * yielding an empty commit range and therefore empty release notes.
+ */
+async function previousTagBefore(
+  git: GitService,
+  packageName: string,
+  version: string,
+  packageCount: number,
+  prefix: string
+): Promise<string | null> {
+  const tags = await git.listTags(tagMatchPrefix(packageName, packageCount, prefix));
+  return (
+    tags
+      .map(tag => ({ tag, version: parseTagVersion(tag, packageName, packageCount, prefix) }))
+      .filter(
+        (t): t is { tag: string; version: string } => !!t.version && semver.lt(t.version, version)
+      )
+      .sort((a, b) => semver.rcompare(a.version, b.version))[0]?.tag ?? null
+  );
+}
+
+/**
+ * `--resume`: finish the release that is already in flight instead of starting a
+ * new one. Emits a no-op bump (`from === to`) per unfinished package so every
+ * downstream step's `versionBumps.size > 0` guard passes and each one re-runs
+ * against its own already-done work (npm 409-skips, git-tag skips existing tags,
+ * GitHub reuses the release for an existing tag).
+ *
+ * Changesets are deliberately ignored here — they describe the *next* release,
+ * and rolling them in would bump past the version we are trying to finish.
+ */
+async function resumeInFlightRelease(
+  ctx: CoreContext & { rootDir: string },
+  registry: string
+): Promise<VersionContext> {
+  const packageCount = ctx.totalPackageCount ?? ctx.packages.length;
+  const states = await detectReleaseState({
+    rootDir: ctx.rootDir,
+    packages: ctx.packages,
+    config: ctx.config,
+    totalPackageCount: packageCount,
+    registry,
+    // About to act on the answer — a lookup we cannot complete must abort, not guess.
+    strict: true,
+  });
+
+  const inFlight = states.filter(s => s.inFlight);
+  if (inFlight.length === 0) {
+    throw new Error(
+      "--resume: no unfinished release found — every package's current version is fully released.\n" +
+        '  Drop --resume to publish a new version.'
+    );
+  }
+
+  const git = new GitService(ctx.rootDir);
+  const versionBumps = new Map<string, VersionBump>();
+  const previousTags = new Map<string, string | null>();
+
+  for (const state of inFlight) {
+    console.log(
+      `↻ Resuming ${state.packageName}@${state.version} (${describeMissingSinks(state)})`
+    );
+    versionBumps.set(state.packageName, {
+      packageName: state.packageName,
+      from: state.version,
+      to: state.version,
+      // No bump is being applied; the type is carried only for display.
+      type: 'patch',
+    });
+    previousTags.set(
+      state.packageName,
+      ctx.config.gitTag.enabled
+        ? await previousTagBefore(
+            git,
+            state.packageName,
+            state.version,
+            packageCount,
+            ctx.config.gitTag.prefix
+          )
+        : await git.getLatestTag(
+            tagMatchPrefix(state.packageName, packageCount, ctx.config.gitTag.prefix)
+          )
+    );
+  }
+
+  return {
+    versionBumps,
+    isPrerelease: inFlight.some(s => s.version.includes('-')),
+    previousTags,
+  };
+}
+
+/**
+ * Read-only check on an ordinary run: is any package's current version already
+ * half-released? Never throws — a registry blip must not fail a release that has
+ * nothing to do with resuming.
+ */
+async function detectInFlightAdvisory(
+  ctx: CoreContext & { rootDir: string },
+  registry: string
+): Promise<PackageReleaseState[]> {
+  try {
+    const states = await detectReleaseState({
+      rootDir: ctx.rootDir,
+      packages: ctx.packages,
+      config: ctx.config,
+      totalPackageCount: ctx.totalPackageCount ?? ctx.packages.length,
+      registry,
+      strict: false,
+    });
+    return states.filter(s => s.inFlight);
+  } catch (error: any) {
+    debug('determine-version', 'in-flight advisory check failed', String(error));
+    return [];
+  }
+}
+
 export const determineVersionStep: PipelineStep<
-  Partial<ChangesetContext> & { cliArgs?: { bump?: string; pre?: string }; rootDir: string },
+  Partial<ChangesetContext> & {
+    cliArgs?: { bump?: string; pre?: string; resume?: boolean };
+    rootDir: string;
+  },
   VersionContext
 > = {
   name: 'determine-version',
@@ -109,6 +236,13 @@ export const determineVersionStep: PipelineStep<
     debug('determine-version', 'cli bump arg', (ctx as any).cliArgs?.bump);
     debug('determine-version', 'conventional commits', ctx.config.conventionalCommits);
     debug('determine-version', 'prerelease', preId ?? 'none');
+
+    // --resume short-circuits every versioning strategy: the version to publish
+    // is already written in package.json, the only question is which sinks are
+    // still missing it.
+    if ((ctx as any).cliArgs?.resume) {
+      return resumeInFlightRelease(ctx as any, registry);
+    }
 
     const rawBumpArg = (ctx as any).cliArgs?.bump as string | undefined;
     if (
@@ -149,6 +283,43 @@ export const determineVersionStep: PipelineStep<
         )
       );
     }
+
+    // The version a bump is computed FROM. Normally that is package.json, which
+    // at rest equals the last released version. It stops being equal when a
+    // previous run bumped package.json and then died before reaching npm: the
+    // file says 0.0.3, nothing published 0.0.3, and bumping from it would burn a
+    // version number (0.0.3 → 0.0.4) on every failed attempt. Rebase onto the
+    // last version that actually shipped so a retry lands where it was aiming.
+    //
+    // Only when the version never reached the registry: once 0.0.3 is live,
+    // 0.0.3 IS the last released version and the next release must be 0.0.4.
+    const baseVersions = new Map<string, string>(ctx.packages.map(p => [p.name, p.version]));
+    if (ctx.command === 'publish') {
+      for (const state of await detectInFlightAdvisory(ctx as any, registry)) {
+        console.warn(
+          `⚠ ${state.packageName}@${state.version} looks half-released (${describeMissingSinks(state)}).\n` +
+            `    Run \`awesome-publish publish --resume\` to finish it instead of starting a new version.`
+        );
+        if (state.onRegistry) continue;
+        const priorTag = previousTags.get(state.packageName);
+        const priorVersion = priorTag
+          ? parseTagVersion(
+              priorTag,
+              state.packageName,
+              ctx.totalPackageCount ?? ctx.packages.length,
+              ctx.config.gitTag.prefix
+            )
+          : null;
+        if (priorVersion) {
+          debug(
+            'determine-version',
+            `${state.packageName}: rebasing bump onto last released ${priorVersion} (package.json is an unpublished ${state.version})`
+          );
+          baseVersions.set(state.packageName, priorVersion);
+        }
+      }
+    }
+    const baseOf = (pkgName: string, fallback: string) => baseVersions.get(pkgName) ?? fallback;
 
     // Attach the stashed previous tags and guard against downgrades on the way
     // out, for every resolution path.
@@ -196,11 +367,12 @@ export const determineVersionStep: PipelineStep<
       for (const pkg of ctx.packages) {
         const type = bumpTypes.get(pkg.name);
         if (type) {
+          const base = baseOf(pkg.name, pkg.version);
           const bump: VersionBump = {
             packageName: pkg.name,
-            from: pkg.version,
+            from: base,
             // zeroBased: automatic releases never graduate a 0.x package to 1.0.0.
-            to: bumpVersion(pkg.version, type, { zeroBased: true }),
+            to: bumpVersion(base, type, { zeroBased: true }),
             type,
           };
           debug('determine-version', `${pkg.name}: ${bump.from} → ${bump.to} (${type})`);
@@ -218,12 +390,13 @@ export const determineVersionStep: PipelineStep<
       const bumpType = validateBumpType(rawBump);
       debug('determine-version', 'using cli bump type', bumpType);
       for (const pkg of ctx.packages) {
+        const base = baseOf(pkg.name, pkg.version);
         const bump: VersionBump = {
           packageName: pkg.name,
-          from: pkg.version,
+          from: base,
           // Explicit --bump is the intentional escape hatch: no zeroBased demotion,
           // so `--bump major` on a 0.x package can deliberately reach 1.0.0.
-          to: bumpVersion(pkg.version, bumpType),
+          to: bumpVersion(base, bumpType),
           type: bumpType,
         };
         debug('determine-version', `${pkg.name}: ${bump.from} → ${bump.to} (${bumpType})`);
@@ -258,11 +431,12 @@ export const determineVersionStep: PipelineStep<
 
         const detected = determineBumpFromCommits(commits);
         if (detected) {
+          const base = baseOf(pkg.name, pkg.version);
           const bump: VersionBump = {
             packageName: pkg.name,
-            from: pkg.version,
+            from: base,
             // zeroBased: automatic releases never graduate a 0.x package to 1.0.0.
-            to: bumpVersion(pkg.version, detected, { zeroBased: true }),
+            to: bumpVersion(base, detected, { zeroBased: true }),
             type: detected,
           };
           debug('determine-version', `${pkg.name}: conventional commits → ${detected}`);
@@ -303,10 +477,11 @@ export const determineVersionStep: PipelineStep<
       if (selected === 'skip') continue;
 
       const type = selected as BumpType;
+      const base = baseOf(pkg.name, pkg.version);
       bumps.set(pkg.name, {
         packageName: pkg.name,
-        from: pkg.version,
-        to: bumpVersion(pkg.version, type),
+        from: base,
+        to: bumpVersion(base, type),
         type,
       });
     }

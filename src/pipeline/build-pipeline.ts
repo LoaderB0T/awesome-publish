@@ -17,7 +17,6 @@ import { cleanupStep } from '../steps/cleanup.js';
 import { readChangesetsStep } from '../steps/read-changesets.js';
 import { consumeChangesetsStep } from '../steps/consume-changesets.js';
 import { generateAiNotesStep } from '../steps/generate-ai-notes.js';
-import { aiNotesPublishStep } from '../steps/ai-notes-publish.js';
 import { createGithubReleaseStep } from '../steps/create-github-release.js';
 
 export type Command = 'publish' | 'pack' | 'version';
@@ -87,7 +86,7 @@ export function buildPipeline(command: Command, config: ResolvedConfig): Pipelin
     // generate them when releases are enabled — otherwise it's a wasted (paid)
     // API call with no consumer.
     if (config.aiReleaseNotes.enabled && config.github.releases.enabled) {
-      steps.push(generateAiNotesStep, aiNotesPublishStep);
+      steps.push(generateAiNotesStep);
     }
   }
 

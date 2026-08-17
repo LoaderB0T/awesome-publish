@@ -15,7 +15,6 @@ export const Phases = {
   PACK_LOCAL: 'pack-local',
   GIT_COMMIT: 'git-commit',
   GIT_TAG: 'git-tag',
-  AI_NOTES_PUBLISH: 'ai-notes-publish',
   GITHUB_RELEASE: 'github-release',
   CLEANUP: 'cleanup',
 } as const;

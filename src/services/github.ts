@@ -47,7 +47,12 @@ export class GitHubService {
     this.baseUrl = `https://api.github.com/repos/${owner}/${repo}`;
   }
 
-  async createRelease(options: CreateReleaseOptions): Promise<{ id: number }> {
+  /**
+   * Create a release, or return the one that already exists for the tag.
+   * `existed: true` means nothing was written — the caller decides whether to
+   * bring the existing release's body up to date.
+   */
+  async createRelease(options: CreateReleaseOptions): Promise<{ id: number; existed?: boolean }> {
     return withRetry(
       async () => {
         const response = await this.fetchFn(`${this.baseUrl}/releases`, {
@@ -69,7 +74,7 @@ export class GitHubService {
           // of aborting the whole pipeline after npm already published.
           if (response.status === 422) {
             const existing = await this.getReleaseByTag(options.tag);
-            if (existing) return existing;
+            if (existing) return { ...existing, existed: true };
           }
           const text = await response.text();
           throw new Error(`GitHub API error ${response.status}: ${text}`);

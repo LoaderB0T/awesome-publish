@@ -9,4 +9,7 @@ export default defineConfig({
   publishFiles: ['lib'],
   stripScripts: true,
   buildCommand: 'pnpm run build',
+  changesets: {
+    enabled: true,
+  },
 });

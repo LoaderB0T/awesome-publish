@@ -13,7 +13,12 @@ export const consumeChangesetsStep: PipelineStep<ChangesetContext & { rootDir: s
   // (no publish step) the PUBLISH_NPM constraint is dropped and this simply
   // runs before git-commit. This prevents losing version intent when publish
   // fails partway.
-  after: [Phases.DETERMINE_VERSION, Phases.PUBLISH_NPM],
+  //
+  // Also after AI note generation: between the delete and the commit the
+  // changesets exist nowhere but git's index, and generating notes is a slow
+  // network call to an AI provider. Ordering it first shrinks that window to
+  // nothing.
+  after: [Phases.DETERMINE_VERSION, Phases.PUBLISH_NPM, Phases.AI_NOTES_GENERATE],
   before: [Phases.GIT_COMMIT],
   hasSideEffects: true,
 

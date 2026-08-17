@@ -52,7 +52,6 @@ const STEP_LABELS: Record<string, string> = {
   'git-commit': 'Commit release',
   'git-tag': 'Create git tags',
   'github-release': 'Create GitHub release',
-  'ai-notes-publish': 'Publish AI notes to release',
   cleanup: 'Cleanup',
 };
 
@@ -77,7 +76,11 @@ function stepSummary(name: string, ctx: Record<string, unknown>): string {
       if (!bumps?.size) return `${label}: no bumps`;
       if (bumps.size === 1) {
         const bump = bumps.values().next().value!;
-        return `${label}: ${bump.from} → ${bump.to} (${bump.type})`;
+        // from === to is a --resume: no bump is being applied, the existing
+        // version is being carried through the remaining steps.
+        return bump.from === bump.to
+          ? `${label}: resuming ${bump.to}`
+          : `${label}: ${bump.from} → ${bump.to} (${bump.type})`;
       }
       return `${label}: ${bumps.size} packages`;
     }
@@ -132,11 +135,6 @@ function stepSummary(name: string, ctx: Record<string, unknown>): string {
     case 'ai-notes-generate': {
       const notes = ctx.releaseNotes as Map<string, string> | undefined;
       return `${label}: ${notes?.size ?? 0} packages`;
-    }
-
-    case 'ai-notes-publish': {
-      const notes = ctx.releaseNotes as Map<string, string> | undefined;
-      return `${label}: ${notes?.size ?? 0} updated`;
     }
 
     case 'confirm-publish':

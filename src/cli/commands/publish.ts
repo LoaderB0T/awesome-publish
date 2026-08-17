@@ -24,6 +24,11 @@ export const publishCommand = defineCommand({
       type: 'boolean',
       description: 'Publish with npm provenance (requires OIDC, e.g. GitHub Actions id-token)',
     },
+    resume: {
+      type: 'boolean',
+      description:
+        'Finish a release that failed partway (publishes/tags/releases the version already in package.json instead of bumping)',
+    },
   },
   async run({ args }) {
     if (args.debug) setDebug(true);
@@ -42,7 +47,10 @@ export const publishCommand = defineCommand({
     const config = await resolveConfigForCommand(rootDir, pm);
     debug('publish', 'resolved config', config);
 
-    await assertGitClean(rootDir, config, args['ignore-git']);
+    // A local run that died between write-versions and git-commit leaves the
+    // bumped package.json uncommitted — that dirty tree IS the unfinished
+    // release, so --resume must not be blocked by the clean-tree gate.
+    await assertGitClean(rootDir, config, args['ignore-git'] || args.resume);
 
     const packages = await resolvePackages(rootDir, config, args.filter);
     debug(
@@ -85,6 +93,7 @@ export const publishCommand = defineCommand({
         registry: args.registry,
         pre,
         provenance: args.provenance,
+        resume: args.resume ?? false,
       },
     };
 
