@@ -11,5 +11,5 @@
   "quoteProps": "as-needed",
   "endOfLine": "lf",
   "sortPackageJson": false,
-  "ignorePatterns": ["test/fixtures/**"]
+  "ignorePatterns": ["test/fixtures/**", "CHANGELOG.md"]
 }
