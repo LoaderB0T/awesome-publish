@@ -94,6 +94,28 @@ describe('createGithubReleaseStep', () => {
     expect(calls.find(c => c.method === 'POST')?.body.body).toBe('- feat: a thing');
   });
 
+  it('falls back to changeset summaries before the commit list', async () => {
+    // Promoting a prerelease: the previous tag IS the prerelease, so the commit
+    // range is empty and only the changesets still describe the release.
+    const dir = repo();
+    const calls = stubGitHub();
+    vi.stubEnv('GITHUB_TOKEN', 'token');
+
+    await createGithubReleaseStep.execute(
+      makeCtx(dir, {
+        previousTags: new Map([['pkg-a', 'v0.0.3']]), // empty range: tag is HEAD
+        changesets: [
+          { id: 'b', summary: 'Added a widget', releases: [{ name: 'pkg-a', type: 'minor' }] },
+          { id: 'a', summary: 'Fixed a crash', releases: [{ name: 'pkg-a', type: 'patch' }] },
+        ],
+      })
+    );
+
+    expect(calls.find(c => c.method === 'POST')?.body.body).toBe(
+      '- Fixed a crash\n- Added a widget'
+    );
+  });
+
   it('updates the body of a release that already exists (re-run / --resume)', async () => {
     // A half-finished run can leave a release with a stale or empty body;
     // reusing it untouched would make that permanent.

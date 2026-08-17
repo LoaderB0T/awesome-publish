@@ -78,6 +78,35 @@ export function parseChangesetFile(filePath: string): Changeset | null {
   };
 }
 
+/**
+ * Summaries of the changesets that release `packageName`.
+ *
+ * Sorted by id for a deterministic order across machines (readdir order is
+ * filesystem-dependent) and de-duplicated so a repeated note is not listed
+ * twice. Shared by the changelog, the AI release-notes prompt and the GitHub
+ * release body so all three describe a release the same way.
+ */
+export function changesetSummariesFor(
+  changesets: Changeset[] | undefined,
+  packageName: string
+): string[] {
+  const relevant = changesets
+    ?.filter(cs => cs.releases.some(r => r.name === packageName))
+    .slice()
+    .sort((a, b) => a.id.localeCompare(b.id));
+  if (!relevant?.length) return [];
+
+  const seen = new Set<string>();
+  const summaries: string[] = [];
+  for (const cs of relevant) {
+    const summary = cs.summary.trim();
+    if (!summary || seen.has(summary)) continue;
+    seen.add(summary);
+    summaries.push(summary);
+  }
+  return summaries;
+}
+
 export const readChangesetsStep: PipelineStep<
   { rootDir: string; cliArgs?: { resume?: boolean } },
   ChangesetContext

@@ -3,10 +3,12 @@ import { Phases } from '../pipeline/phases.js';
 import type { PipelineStep } from '../pipeline/step.js';
 import type {
   AiNotesContext,
+  ChangesetContext,
   PublishContext,
   VersionContext,
   GithubReleaseContext,
 } from '../pipeline/context.js';
+import { changesetSummariesFor } from './read-changesets.js';
 import { GitHubService, parseGitHubRepo } from '../services/github.js';
 import { GitService } from '../services/git.js';
 import { resolveReleaseCommit } from '../services/release-state.js';
@@ -14,7 +16,10 @@ import { buildTagName, buildCombinedTagName, buildCombinedReleaseName } from './
 import { debug } from '../services/debug.js';
 
 export const createGithubReleaseStep: PipelineStep<
-  PublishContext & VersionContext & Partial<AiNotesContext> & { rootDir: string },
+  PublishContext &
+    VersionContext &
+    Partial<AiNotesContext> &
+    Partial<ChangesetContext> & { rootDir: string },
   GithubReleaseContext
 > = {
   name: 'github-release',
@@ -139,6 +144,14 @@ export const createGithubReleaseStep: PipelineStep<
         // body that is about to be thrown away (a first release walks the whole
         // history).
         let body = ctx.releaseNotes?.get(pkg.name);
+        // Same precedence as the changelog: the authors' changeset summaries
+        // describe the release better than the commit log, and after a
+        // prerelease promotion the commit range is empty while the changesets
+        // still hold the actual content.
+        if (!body) {
+          const summaries = changesetSummariesFor(ctx.changesets, pkg.name);
+          if (summaries.length) body = summaries.map(s => `- ${s}`).join('\n');
+        }
         if (!body) {
           // Use the tag captured before git-tag created this release's tag —
           // querying git here would return the just-created tag and produce an

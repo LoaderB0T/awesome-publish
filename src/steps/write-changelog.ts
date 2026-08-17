@@ -6,6 +6,7 @@ import type { VersionContext, ChangesetContext, ChangelogContext } from '../pipe
 import type { Changeset } from '../types/changeset.js';
 import type { VersionBump } from '../types/package-info.js';
 import { GitService } from '../services/git.js';
+import { changesetSummariesFor } from './read-changesets.js';
 import { groupCommitsByType } from '../services/conventional-commits.js';
 import { debug } from '../services/debug.js';
 
@@ -40,19 +41,11 @@ function buildChangelogEntry(
   lines.push(heading);
   lines.push('');
 
-  // Changeset summaries. Sort by id for a deterministic order across machines
-  // (readdir order is filesystem-dependent) and de-dup identical summaries so a
-  // repeated note is not listed twice.
-  const pkgChangesets = changesets
-    ?.filter(cs => cs.releases.some(r => r.name === pkg.name))
-    .slice()
-    .sort((a, b) => a.id.localeCompare(b.id));
-  if (pkgChangesets?.length) {
-    const seen = new Set<string>();
-    for (const cs of pkgChangesets) {
-      const summary = cs.summary.trim();
-      if (seen.has(summary)) continue;
-      seen.add(summary);
+  // Changeset summaries describe intended user-facing changes, so they win over
+  // whatever the commit log happens to say.
+  const summaries = changesetSummariesFor(changesets, pkg.name);
+  if (summaries.length) {
+    for (const summary of summaries) {
       lines.push(`- ${summary}`);
     }
     lines.push('');

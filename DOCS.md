@@ -316,9 +316,16 @@ export default defineConfig({
 For OpenAI-compatible endpoints, set `provider: 'openai-compatible'` and a
 `baseUrl` (must be https, except localhost). The API key comes from
 `AWESOME_PUBLISH_AI_KEY`. Provide a `customPromptFile` to override the prompt;
-`{{package}}`, `{{version}}`, `{{from}}`, `{{type}}`, and `{{commits}}` are
-interpolated. Commit messages are treated as untrusted input. If an AI call
-fails, the release continues without notes.
+`{{package}}`, `{{version}}`, `{{from}}`, `{{type}}`, `{{commits}}` and
+`{{changesets}}` are interpolated. Commit messages and changeset summaries are
+treated as untrusted input. If an AI call fails, the release continues without
+notes.
+
+Changeset summaries drive the notes when there are any, with commits as
+supporting detail — the same precedence the changelog uses. This matters when
+promoting a prerelease to stable: the previous tag is the prerelease itself, so
+the commit range is empty and commits alone would describe the release as
+containing no changes.
 
 Notes are generated before the release commit (so they summarise the release,
 not the `chore: release` commit) and written as the GitHub release body in the
