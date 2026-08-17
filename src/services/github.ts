@@ -6,6 +6,8 @@ const execFileAsync = promisify(execFile);
 
 export interface CreateReleaseOptions {
   tag: string;
+  /** Release title. Defaults to the tag, which is what you want when the tag is already human-readable. */
+  name?: string;
   body?: string;
   draft?: boolean;
   prerelease?: boolean;
@@ -60,7 +62,7 @@ export class GitHubService {
           headers: this.headers(),
           body: JSON.stringify({
             tag_name: options.tag,
-            name: options.tag,
+            name: options.name ?? options.tag,
             body: options.body ?? '',
             draft: options.draft ?? false,
             prerelease: options.prerelease ?? false,

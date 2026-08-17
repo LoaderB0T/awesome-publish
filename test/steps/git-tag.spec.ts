@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { buildTagName, parseTagVersion, buildCombinedTagName } from '../../src/steps/git-tag.js';
+import {
+  buildTagName,
+  parseTagVersion,
+  buildCombinedTagName,
+  buildCombinedReleaseName,
+} from '../../src/steps/git-tag.js';
 
 describe('buildTagName', () => {
   it('single package: v{version}', () => {
@@ -44,5 +49,18 @@ describe('buildCombinedTagName', () => {
     const sha = 'abc1234def5678901234567890abcdef12345678';
     expect(buildCombinedTagName(sha)).toBe('release-abc1234');
     expect(buildCombinedTagName(sha)).toBe(buildCombinedTagName(sha));
+  });
+});
+
+describe('buildCombinedReleaseName', () => {
+  it('titles the release with the commit date, not the sha tag', () => {
+    expect(buildCombinedReleaseName('release-abc1234', '2026-08-17T20:07:53+00:00')).toBe(
+      'Release 2026-08-17 20:07'
+    );
+  });
+
+  it('falls back to the tag when the commit date is unavailable or malformed', () => {
+    expect(buildCombinedReleaseName('release-abc1234', null)).toBe('release-abc1234');
+    expect(buildCombinedReleaseName('release-abc1234', 'not-a-date')).toBe('release-abc1234');
   });
 });

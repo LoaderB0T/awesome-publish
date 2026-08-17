@@ -277,8 +277,11 @@ Set `github.releases.enabled` and a `mode`:
 
 - `per-package` — one release per package, tagged `pkg@1.2.3` (or `v1.2.3` for
   a single-package repo).
-- `combined` — one release listing all published packages, tagged
-  `release-<short-commit-sha>`.
+- `combined` — one release listing all published packages, titled with the
+  release date (`Release 2026-08-17 20:07`) and tagged
+  `release-<short-commit-sha>`. The tag is the sha because it has to be stable
+  across retries; the title is the date because a sha reads poorly, and GitHub
+  shows the tag and target commit on the release page regardless.
 
 Requires a `GITHUB_TOKEN`. Releases are only created after a successful publish,
 and are pinned to the commit the release was cut from (resolved via the package's

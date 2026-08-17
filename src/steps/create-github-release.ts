@@ -10,7 +10,7 @@ import type {
 import { GitHubService, parseGitHubRepo } from '../services/github.js';
 import { GitService } from '../services/git.js';
 import { resolveReleaseCommit } from '../services/release-state.js';
-import { buildTagName, buildCombinedTagName } from './git-tag.js';
+import { buildTagName, buildCombinedTagName, buildCombinedReleaseName } from './git-tag.js';
 import { debug } from '../services/debug.js';
 
 export const createGithubReleaseStep: PipelineStep<
@@ -59,7 +59,7 @@ export const createGithubReleaseStep: PipelineStep<
      */
     const writeRelease = async (
       key: string,
-      options: { tag: string; body: string; target?: string }
+      options: { tag: string; name?: string; body: string; target?: string }
     ): Promise<void> => {
       const { id, existed } = await github.createRelease({
         ...options,
@@ -101,13 +101,21 @@ export const createGithubReleaseStep: PipelineStep<
       // tag, or it creates a second release for a release that already exists.
       const tag = buildCombinedTagName(target);
       debug('github-release', `creating combined release: ${tag} @ ${target}`);
-      // Keep the "Published packages" version table above the AI notes —
-      // the table is the factual part, the notes are the prose.
+      // Keep the "Published packages" version table above the AI notes — the
+      // table is the factual part, the notes are the prose. One heading per
+      // package carries both name and version, and no `---` rules between
+      // sections: a markdown heading already renders its own separator.
       const notes = [...(ctx.releaseNotes ?? new Map<string, string>()).entries()]
-        .map(([name, n]) => `## ${name}\n\n${n}`)
-        .join('\n\n---\n\n');
+        .map(([name, n]) => {
+          const heading = `## ${name} ${ctx.versionBumps.get(name)?.to ?? ''}`.trimEnd();
+          return `${heading}\n\n${n}`;
+        })
+        .join('\n\n');
       await writeRelease('combined', {
         tag,
+        // The sha-derived tag is the idempotency key, not the title — show the
+        // release date instead. GitHub still displays the tag and the commit.
+        name: buildCombinedReleaseName(tag, await git.getCommitDate(target)),
         body: notes ? `${body}\n\n${notes}` : body,
         target,
       });

@@ -56,6 +56,23 @@ export function buildCombinedTagName(releaseCommit: string): string {
   return `release-${releaseCommit.slice(0, 7)}`;
 }
 
+/**
+ * Human-readable title for a combined release: when it was cut.
+ *
+ * The tag has to be the commit (it is the key that makes a retry find the
+ * existing release instead of making a second one), but a sha is a poor title,
+ * and GitHub shows the tag and target commit on the release page anyway. Taken
+ * from the commit's own date, not the clock, so a resumed release is still
+ * titled with the moment it was originally cut.
+ *
+ * `commitDate` is ISO-8601 (`git show --format=%cI`); null falls back to the tag.
+ */
+export function buildCombinedReleaseName(tag: string, commitDate: string | null): string {
+  if (!commitDate) return tag;
+  const match = commitDate.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/);
+  return match ? `Release ${match[1]} ${match[2]}` : tag;
+}
+
 export const gitTagStep: PipelineStep<VersionContext & { rootDir: string }> = {
   name: 'git-tag',
   phase: Phases.GIT_TAG,

@@ -101,6 +101,20 @@ export class GitService {
       .filter(Boolean);
   }
 
+  /**
+   * Committer date of a commit, ISO-8601 with the committer's own offset
+   * (`2026-08-17T20:07:53+00:00`). Read from the commit rather than the clock so
+   * a value derived from it stays the same on a later re-run.
+   */
+  public async getCommitDate(commitish: string): Promise<string | null> {
+    try {
+      const { stdout } = await this.exec('git', ['show', '-s', '--format=%cI', commitish]);
+      return stdout.trim() || null;
+    } catch {
+      return null;
+    }
+  }
+
   /** Commit SHA a tag points at, or null if the tag does not exist. */
   public async getTagCommit(tag: string): Promise<string | null> {
     try {
