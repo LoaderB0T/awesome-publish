@@ -7,7 +7,7 @@ import type { ChangesetContext, CoreContext, VersionContext } from '../pipeline/
 import type { VersionBump } from '../types/package-info.js';
 import type { Changeset } from '../types/changeset.js';
 import { GitService } from '../services/git.js';
-import { tagMatchPrefix, parseTagVersion } from './git-tag.js';
+import { tagMatchPrefix, parseTagVersion, previousReleaseTag } from './git-tag.js';
 import {
   detectReleaseState,
   describeMissingSinks,
@@ -93,29 +93,6 @@ async function applyPrerelease(
 }
 
 /**
- * The tag of the release *before* `version`, for a package whose own tag may
- * already exist. `getLatestTag` would return the version's own tag on a resume,
- * yielding an empty commit range and therefore empty release notes.
- */
-async function previousTagBefore(
-  git: GitService,
-  packageName: string,
-  version: string,
-  packageCount: number,
-  prefix: string
-): Promise<string | null> {
-  const tags = await git.listTags(tagMatchPrefix(packageName, packageCount, prefix));
-  return (
-    tags
-      .map(tag => ({ tag, version: parseTagVersion(tag, packageName, packageCount, prefix) }))
-      .filter(
-        (t): t is { tag: string; version: string } => !!t.version && semver.lt(t.version, version)
-      )
-      .sort((a, b) => semver.rcompare(a.version, b.version))[0]?.tag ?? null
-  );
-}
-
-/**
  * `--resume`: finish the release that is already in flight instead of starting a
  * new one. Emits a no-op bump (`from === to`) per unfinished package so every
  * downstream step's `versionBumps.size > 0` guard passes and each one re-runs
@@ -165,17 +142,15 @@ async function resumeInFlightRelease(
     });
     previousTags.set(
       state.packageName,
-      ctx.config.gitTag.enabled
-        ? await previousTagBefore(
-            git,
-            state.packageName,
-            state.version,
-            packageCount,
-            ctx.config.gitTag.prefix
-          )
-        : await git.getLatestTag(
-            tagMatchPrefix(state.packageName, packageCount, ctx.config.gitTag.prefix)
-          )
+      await previousReleaseTag(git, {
+        packageName: state.packageName,
+        packageCount,
+        prefix: ctx.config.gitTag.prefix,
+        // Exclude the resumed version's own tag, which already exists whenever
+        // the run died after git-tag.
+        below: state.version,
+        stableOnly: semver.prerelease(state.version) === null,
+      })
     );
   }
 
@@ -323,8 +298,26 @@ export const determineVersionStep: PipelineStep<
 
     // Attach the stashed previous tags and guard against downgrades on the way
     // out, for every resolution path.
-    const finalize = (resolved: Map<string, VersionBump>): VersionContext => {
+    const finalize = async (resolved: Map<string, VersionBump>): Promise<VersionContext> => {
       for (const bump of resolved.values()) {
+        // Now that the target version is known, narrow the range start to the
+        // previous release *of the same kind*. The loop above took the latest
+        // tag of any kind, which is what bump detection wants but not what the
+        // notes want: a stable release diffed against its own prerelease finds
+        // no commits and ships an empty body. Keyed off bump.to rather than the
+        // --pre flag so a `next` changeset (a prerelease with no flag) is
+        // classified correctly too.
+        previousTags.set(
+          bump.packageName,
+          await previousReleaseTag(git, {
+            packageName: bump.packageName,
+            packageCount: ctx.totalPackageCount ?? ctx.packages.length,
+            prefix: ctx.config.gitTag.prefix,
+            below: bump.to,
+            stableOnly: semver.prerelease(bump.to) === null,
+          })
+        );
+
         // A `next` bump deliberately switches the prerelease line (e.g.
         // 0.0.1-pre7 → 0.0.1-next.0), which semver ranks as LOWER because "next"
         // < "pre" alphabetically. That's intentional churn, not a downgrade, so

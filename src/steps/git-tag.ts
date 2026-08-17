@@ -73,6 +73,46 @@ export function buildCombinedReleaseName(tag: string, commitDate: string | null)
   return match ? `Release ${match[1]} ${match[2]}` : tag;
 }
 
+/**
+ * The tag of the release that precedes `below`, used as the start of the commit
+ * range for changelogs and release notes.
+ *
+ * Ranks tags by semver rather than by `git describe`'s topological "nearest",
+ * so the answer is the previous *release*, not whatever tag happens to sit
+ * closest on the graph.
+ *
+ * `stableOnly` skips prerelease tags. Cutting a stable 0.0.3 right after
+ * publishing 0.0.3-next.0 would otherwise diff against the prerelease and find
+ * nothing — the release ships with an empty body describing changes that were
+ * very much real. A prerelease, by contrast, wants the previous prerelease.
+ * Returns null when no earlier release qualifies (first release → whole history).
+ */
+export async function previousReleaseTag(
+  git: GitService,
+  opts: {
+    packageName: string;
+    packageCount: number;
+    prefix: string;
+    /** Only consider tags strictly below this version (excludes the release's own tag on a re-run). */
+    below: string;
+    stableOnly: boolean;
+  }
+): Promise<string | null> {
+  const tags = await git.listTags(tagMatchPrefix(opts.packageName, opts.packageCount, opts.prefix));
+  return (
+    tags
+      .map(tag => ({
+        tag,
+        version: parseTagVersion(tag, opts.packageName, opts.packageCount, opts.prefix),
+      }))
+      .filter((t): t is { tag: string; version: string } => {
+        if (!t.version || !semver.lt(t.version, opts.below)) return false;
+        return opts.stableOnly ? semver.prerelease(t.version) === null : true;
+      })
+      .sort((a, b) => semver.rcompare(a.version, b.version))[0]?.tag ?? null
+  );
+}
+
 export const gitTagStep: PipelineStep<VersionContext & { rootDir: string }> = {
   name: 'git-tag',
   phase: Phases.GIT_TAG,

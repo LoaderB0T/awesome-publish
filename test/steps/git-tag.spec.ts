@@ -1,10 +1,16 @@
 import { describe, it, expect } from 'vitest';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { execFileSync } from 'node:child_process';
 import {
   buildTagName,
   parseTagVersion,
   buildCombinedTagName,
   buildCombinedReleaseName,
+  previousReleaseTag,
 } from '../../src/steps/git-tag.js';
+import { GitService } from '../../src/services/git.js';
 
 describe('buildTagName', () => {
   it('single package: v{version}', () => {
@@ -62,5 +68,57 @@ describe('buildCombinedReleaseName', () => {
   it('falls back to the tag when the commit date is unavailable or malformed', () => {
     expect(buildCombinedReleaseName('release-abc1234', null)).toBe('release-abc1234');
     expect(buildCombinedReleaseName('release-abc1234', 'not-a-date')).toBe('release-abc1234');
+  });
+});
+
+describe('previousReleaseTag', () => {
+  /** Temp repo with one commit carrying every given tag. */
+  function repoWithTags(tags: string[]): GitService {
+    const dir = mkdtempSync(join(tmpdir(), 'ap-prt-'));
+    execFileSync('git', ['init'], { cwd: dir });
+    execFileSync('git', ['config', 'user.email', 'test@test.com'], { cwd: dir });
+    execFileSync('git', ['config', 'user.name', 'Test'], { cwd: dir });
+    writeFileSync(join(dir, 'f.txt'), 'x');
+    execFileSync('git', ['add', '.'], { cwd: dir });
+    execFileSync('git', ['commit', '-m', 'init'], { cwd: dir });
+    for (const tag of tags) execFileSync('git', ['tag', tag], { cwd: dir });
+    return new GitService(dir);
+  }
+
+  const opts = { packageName: 'pkg-a', packageCount: 1, prefix: '' };
+
+  it('a stable release skips prerelease tags', async () => {
+    // Diffing 0.0.3 against its own 0.0.3-next.0 finds no commits and ships an
+    // empty release body — the bug this exists to prevent.
+    const git = repoWithTags(['v0.0.1', 'v0.0.2', 'v0.0.3-next.0']);
+    expect(await previousReleaseTag(git, { ...opts, below: '0.0.3', stableOnly: true })).toBe(
+      'v0.0.2'
+    );
+  });
+
+  it('a prerelease diffs against the previous prerelease', async () => {
+    const git = repoWithTags(['v0.0.2', 'v0.0.3-next.0']);
+    expect(
+      await previousReleaseTag(git, { ...opts, below: '0.0.3-next.1', stableOnly: false })
+    ).toBe('v0.0.3-next.0');
+  });
+
+  it('excludes the version its own tag already exists for (resume)', async () => {
+    const git = repoWithTags(['v0.0.2', 'v0.0.3']);
+    expect(await previousReleaseTag(git, { ...opts, below: '0.0.3', stableOnly: true })).toBe(
+      'v0.0.2'
+    );
+  });
+
+  it('ranks by semver, not by tag creation order', async () => {
+    const git = repoWithTags(['v0.0.10', 'v0.0.9']);
+    expect(await previousReleaseTag(git, { ...opts, below: '0.1.0', stableOnly: true })).toBe(
+      'v0.0.10'
+    );
+  });
+
+  it('is null when no earlier release qualifies', async () => {
+    const git = repoWithTags(['v0.0.3-next.0']);
+    expect(await previousReleaseTag(git, { ...opts, below: '0.0.3', stableOnly: true })).toBeNull();
   });
 });
