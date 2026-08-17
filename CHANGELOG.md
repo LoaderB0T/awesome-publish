@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.0.8 (2026-08-17)
+
+- Version bump
+
 ## 0.0.7 (2026-08-07)
 
 - Version bump
